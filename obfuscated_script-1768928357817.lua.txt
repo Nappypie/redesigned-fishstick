@@ -1,6 +1,6 @@
 --[[
     Arqel Key System
-    Version: 1.0.2
+    Version: 1.0.3
     
     Create + Connect API
 ]]
@@ -169,6 +169,7 @@ Arqel.Themes = {
 }
 
 local NotificationList = {}
+local blurEffect = nil
 
 local function isMobile()
     return UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
@@ -208,8 +209,6 @@ function Arqel.Create(options)
     self._junkie = nil
     self._connectCallback = nil
     self._verifiedCallback = nil
-    self._blurEffect = nil
-    self._gui = nil
     
     return self
 end
@@ -336,107 +335,42 @@ function Arqel:_clearKey()
     return true
 end
 
-function Arqel:_hasValidator()
-    return self._junkie ~= nil or self._connectCallback ~= nil
-end
-
-function Arqel:_validateKey(key)
-    if self._junkie then
-        local ok, result = pcall(function()
-            return self._junkie.check_key(key)
-        end)
-        
-        if not ok then
-            return false, "ERROR", "Connection failed"
-        end
-        
-        if not result then
-            return false, "ERROR", "Server unreachable"
-        end
-        
-        if result.valid or result.message == "KEY_VALID" or result.message == "KEYLESS" then
-            return true, result.message == "KEYLESS" and "KEYLESS" or "VALID", nil
-        else
-            return false, result.error or "INVALID", nil
-        end
-    end
-    
-    if self._connectCallback then
-        local callbackResult = {success = false, error = nil}
-        
-        local UI = {}
-        function UI:Success() callbackResult.success = true end
-        function UI:Error(msg) callbackResult.success = false; callbackResult.error = msg end
-        
-        local ok, err = pcall(function()
-            self._connectCallback(key, UI)
-        end)
-        
-        if not ok then
-            return false, "ERROR", tostring(err)
-        end
-        
-        if callbackResult.success then
-            return true, "VALID", nil
-        else
-            return false, "INVALID", callbackResult.error
-        end
-    end
-    
-    return false, "NO_VALIDATOR", "No validator configured"
-end
-
-function Arqel:_checkKeyless()
-    if not self._junkie then return false end
-    
-    local ok, result = pcall(function()
-        return self._junkie.check_key("")
-    end)
-    
-    if ok and result and (result.message == "KEYLESS" or (result.valid and result.message == "KEYLESS")) then
-        return true
-    end
-    
-    return false
-end
-
 function Arqel:_enableBlur()
     if not self.Blur then return end
     
-    local existing = Lighting:FindFirstChild("ArqelBlur")
+    local existing = Lighting:FindFirstChild("ArqelKeySystemBlur")
     if existing then existing:Destroy() end
     
-    self._blurEffect = Instance.new("BlurEffect")
-    self._blurEffect.Name = "ArqelBlur"
-    self._blurEffect.Size = 0
-    self._blurEffect.Parent = Lighting
+    blurEffect = Instance.new("BlurEffect")
+    blurEffect.Name = "ArqelKeySystemBlur"
+    blurEffect.Size = 0
+    blurEffect.Parent = Lighting
     
-    TweenService:Create(self._blurEffect, TweenInfo.new(0.4, Enum.EasingStyle.Quart), {
+    TweenService:Create(blurEffect, TweenInfo.new(0.4, Enum.EasingStyle.Quart), {
         Size = self.BlurSize
     }):Play()
 end
 
 function Arqel:_disableBlur()
-    if self._blurEffect and self._blurEffect.Parent then
-        TweenService:Create(self._blurEffect, TweenInfo.new(0.3, Enum.EasingStyle.Quart), {
+    if blurEffect and blurEffect.Parent then
+        TweenService:Create(blurEffect, TweenInfo.new(0.3, Enum.EasingStyle.Quart), {
             Size = 0
         }):Play()
+        
         task.delay(0.3, function()
-            if self._blurEffect and self._blurEffect.Parent then
-                self._blurEffect:Destroy()
+            if blurEffect and blurEffect.Parent then
+                blurEffect:Destroy()
+                blurEffect = nil
             end
         end)
+    else
+        local existing = Lighting:FindFirstChild("ArqelKeySystemBlur")
+        if existing then existing:Destroy() end
+        blurEffect = nil
     end
-    
-    local existing = Lighting:FindFirstChild("ArqelBlur")
-    if existing then existing:Destroy() end
 end
 
-function Arqel:Notify(options)
-    local title = options.Title or "Notification"
-    local message = options.Message or ""
-    local duration = options.Duration or 3
-    local notifType = options.Type or "info"
+function Arqel:Notify(title, message, duration, iconType)
     local colors = self:_getColors()
     
     local notifGui = Instance.new("ScreenGui")
@@ -483,15 +417,27 @@ function Arqel:Notify(options)
     icon.BackgroundTransparency = 1
     icon.ScaleType = Enum.ScaleType.Fit
     
-    if notifType == "success" then
+    if iconType == "success" then
         icon.Image = Icons.check
         icon.ImageColor3 = colors.success
-    elseif notifType == "error" then
+    elseif iconType == "error" then
         icon.Image = Icons.alert
         icon.ImageColor3 = colors.error
-    elseif notifType == "warning" then
+    elseif iconType == "warning" then
         icon.Image = Icons.alert
         icon.ImageColor3 = colors.warning
+    elseif iconType == "shield" then
+        icon.Image = Icons.shield
+        icon.ImageColor3 = colors.accent
+    elseif iconType == "copy" then
+        icon.Image = Icons.copy
+        icon.ImageColor3 = colors.success
+    elseif iconType == "discord" then
+        icon.Image = Icons.discord
+        icon.ImageColor3 = colors.discord
+    elseif iconType == "close" then
+        icon.Image = Icons.close
+        icon.ImageColor3 = colors.error
     else
         icon.Image = Icons.shield
         icon.ImageColor3 = colors.accent
@@ -559,10 +505,12 @@ function Arqel:Notify(options)
         restack()
     end
     
-    TweenService:Create(progressBar, TweenInfo.new(duration, Enum.EasingStyle.Linear), {
-        Size = UDim2.new(0, 0, 1, 0)
-    }):Play()
-    task.delay(duration, dismiss)
+    if duration and duration > 0 then
+        TweenService:Create(progressBar, TweenInfo.new(duration, Enum.EasingStyle.Linear), {
+            Size = UDim2.new(0, 0, 1, 0)
+        }):Play()
+        task.delay(duration, dismiss)
+    end
     
     local btn = Instance.new("TextButton", frame)
     btn.Size = UDim2.new(1, 0, 1, 0)
@@ -599,7 +547,6 @@ function Arqel:_build()
     screenGui.ResetOnSpawn = false
     screenGui.IgnoreGuiInset = true
     screenGui.Parent = CoreGui
-    self._gui = screenGui
     
     local mainFrame = Instance.new("Frame", screenGui)
     mainFrame.Size = UDim2.new(0, windowWidth, 0, windowHeight)
@@ -871,7 +818,7 @@ function Arqel:_build()
             dotsThread = nil
         end
         
-        if state == "loading" then
+        if state == "verifying" then
             statusLabel.TextColor3 = colors.accent
             statusIcon.ImageColor3 = colors.accent
             statusIcon.Image = Icons.loading
@@ -880,6 +827,8 @@ function Arqel:_build()
             spinConnection = RunService.Heartbeat:Connect(function(dt)
                 if statusIcon and statusIcon.Parent then
                     statusIcon.Rotation = (statusIcon.Rotation + dt * 360) % 360
+                else
+                    if spinConnection then spinConnection:Disconnect() end
                 end
             end)
             
@@ -888,6 +837,7 @@ function Arqel:_build()
             local baseText = msg or "Verifying license"
             dotsThread = task.spawn(function()
                 while statusLabel and statusLabel.Parent do
+                    if not statusLabel.Text:find("Verifying", 1, true) then break end
                     statusLabel.Text = baseText .. dots[i]
                     i = (i % #dots) + 1
                     task.wait(0.4)
@@ -912,7 +862,7 @@ function Arqel:_build()
     end
     
     local function handleClose()
-        self:Notify({Title = "Goodbye", Message = "Session terminated", Duration = 2, Type = "info"})
+        self:Notify("Goodbye", "Session terminated", 2, "close")
         self:_disableBlur()
         
         TweenService:Create(mainFrame, TweenInfo.new(0.4, Enum.EasingStyle.Quart), {
@@ -930,25 +880,61 @@ function Arqel:_build()
         local key = textBox.Text:gsub("%s+", "")
         
         if key == "" then
-            self:Notify({Title = "Error", Message = "Please enter your license", Duration = 3, Type = "warning"})
+            self:Notify("Error", "Please enter your license", 3, "warning")
             return
         end
         
-        setStatus("loading", "Verifying license")
+        setStatus("verifying")
         redeemBtn.Active = false
         
         task.wait(0.3)
         
-        local valid, status, errMsg = self:_validateKey(key)
+        local success, result
+        
+        if self._junkie then
+            success, result = pcall(function()
+                return self._junkie.check_key(key)
+            end)
+        elseif self._connectCallback then
+            local callbackResult = {valid = false, error = nil, message = nil}
+            local UI = {}
+            function UI:Success()
+                callbackResult.valid = true
+                callbackResult.message = "KEY_VALID"
+            end
+            function UI:Error(msg)
+                callbackResult.valid = false
+                callbackResult.error = msg or "INVALID"
+            end
+            
+            success = true
+            pcall(function()
+                self._connectCallback(key, UI)
+            end)
+            result = callbackResult
+        else
+            success = false
+        end
         
         redeemBtn.Active = true
         
-        if valid then
+        if not success then
+            setStatus("error")
+            self:Notify("Error", "Connection failed", 3, "error")
+            return
+        end
+        
+        if not result then
+            setStatus("error")
+            self:Notify("Error", "Server unreachable", 3, "error")
+            return
+        end
+        
+        if result.valid or result.message == "KEY_VALID" or result.message == "KEYLESS" then
             self:_saveKey(key)
             getgenv().SCRIPT_KEY = key
-            
-            setStatus("success", "License authenticated")
-            self:Notify({Title = "Success", Message = "License authenticated!", Duration = 2, Type = "success"})
+            setStatus("success")
+            self:Notify("Success", "License authenticated!", 2, "success")
             
             task.wait(1)
             self:_disableBlur()
@@ -960,12 +946,8 @@ function Arqel:_build()
             
             task.wait(0.4)
             screenGui:Destroy()
-            
-            if self._verifiedCallback then
-                self._verifiedCallback()
-            end
         else
-            setStatus("error", "Verification failed")
+            setStatus("error")
             
             local errorMessages = {
                 KEY_INVALID = "License not found",
@@ -980,10 +962,12 @@ function Arqel:_build()
                 ERROR = "Connection failed"
             }
             
-            local msg = errorMessages[status] or errMsg or "Verification failed"
-            self:Notify({Title = "Failed", Message = msg, Duration = 4, Type = "error"})
+            local errCode = result.error or "Unknown"
+            local msg = errorMessages[errCode] or result.message or errCode
             
-            if status == "HWID_BANNED" then
+            self:Notify("Failed", msg, 4, "error")
+            
+            if errCode == "HWID_BANNED" then
                 task.wait(2)
                 Players.LocalPlayer:Kick("Hardware banned")
             end
@@ -999,33 +983,32 @@ function Arqel:_build()
     acquireBtn.MouseButton1Click:Connect(function()
         if self.Premium then
             if self.Discord and self.Discord ~= "" then
-                self:Notify({Title = "Copied", Message = "Discord invite copied!", Duration = 2, Type = "success"})
+                self:Notify("Copied", "Discord invite copied!", 2, "copy")
                 pcall(function() setclipboard(self.Discord) end)
             else
-                self:Notify({Title = "Error", Message = "No Discord configured", Duration = 3, Type = "error"})
+                self:Notify("Error", "No Discord configured", 3, "error")
             end
         else
             local link = self.KeyLink
             if (not link or link == "") and self._junkie then
-                local ok, l = pcall(function() return self._junkie.get_key_link() end)
-                if ok and l then link = l end
+                pcall(function() link = self._junkie.get_key_link() end)
             end
             
             if link and link ~= "" then
-                self:Notify({Title = "Copied", Message = "License link copied!", Duration = 3, Type = "success"})
+                self:Notify("Copied", "License link copied!", 3, "copy")
                 pcall(function() setclipboard(link) end)
             else
-                self:Notify({Title = "Error", Message = "No license link configured", Duration = 3, Type = "error"})
+                self:Notify("Error", "No license link configured", 3, "error")
             end
         end
     end)
     
     discordBtn.MouseButton1Click:Connect(function()
         if self.Discord and self.Discord ~= "" then
-            self:Notify({Title = "Copied", Message = "Discord invite copied!", Duration = 2, Type = "success"})
+            self:Notify("Copied", "Discord invite copied!", 2, "copy")
             pcall(function() setclipboard(self.Discord) end)
         else
-            self:Notify({Title = "Error", Message = "No Discord configured", Duration = 3, Type = "error"})
+            self:Notify("Error", "No Discord configured", 3, "error")
         end
     end)
     
@@ -1057,77 +1040,104 @@ function Arqel:_build()
     }):Play()
 end
 
+function Arqel:_getKeyToValidate()
+    if getgenv().SCRIPT_KEY and getgenv().SCRIPT_KEY ~= "" then
+        return getgenv().SCRIPT_KEY, "getgenv"
+    end
+    
+    local savedKey = self:_loadKey()
+    if savedKey then
+        return savedKey, "saved"
+    end
+    
+    return nil, nil
+end
+
+function Arqel:_validateWithJunkie(key)
+    if not self._junkie then return nil end
+    
+    local success, result = pcall(function()
+        return self._junkie.check_key(key)
+    end)
+    
+    if success and result then
+        return result
+    end
+    
+    return nil
+end
+
 function Arqel:Await()
-    -- User forced keyless mode
+    -- User forced keyless
     if self.Keyless then
-        self:Notify({Title = "Granted", Message = "Access granted!", Duration = 2, Type = "success"})
+        self:Notify("Granted", "Access granted!", 2, "success")
         getgenv().SCRIPT_KEY = "KEYLESS"
-        if self._verifiedCallback then self._verifiedCallback() end
+        if self._verifiedCallback then
+            task.spawn(self._verifiedCallback)
+        end
         return self
     end
     
-    local hasValidator = self:_hasValidator()
+    local keyToCheck, keySource = self:_getKeyToValidate()
     
-    -- Check external key first
-    if getgenv().SCRIPT_KEY and getgenv().SCRIPT_KEY ~= "" then
-        if hasValidator then
-            local key = getgenv().SCRIPT_KEY
-            self:Notify({Title = "Verifying", Message = "Validating license...", Duration = 2, Type = "info"})
-            task.wait(0.3)
-            
-            local valid, status = self:_validateKey(key)
-            if valid then
-                if status == "KEYLESS" then
-                    getgenv().SCRIPT_KEY = "KEYLESS"
-                    self:Notify({Title = "Granted", Message = "Access granted!", Duration = 2, Type = "success"})
-                else
-                    self:_saveKey(key)
-                    self:Notify({Title = "Welcome", Message = "License authenticated!", Duration = 2, Type = "success"})
-                end
-                if self._verifiedCallback then self._verifiedCallback() end
-                return self
-            else
-                getgenv().SCRIPT_KEY = nil
+    if keyToCheck then
+        self:Notify("Verifying", "Validating saved license...", 2, "shield")
+        task.wait(0.3)
+        
+        local result
+        
+        if self._junkie then
+            result = self:_validateWithJunkie(keyToCheck)
+        elseif self._connectCallback then
+            local callbackResult = {valid = false, message = nil}
+            local UI = {}
+            function UI:Success()
+                callbackResult.valid = true
+                callbackResult.message = "KEY_VALID"
             end
-        else
-            getgenv().SCRIPT_KEY = nil
-        end
-    end
-    
-    -- Check saved key
-    if hasValidator then
-        local savedKey = self:_loadKey()
-        if savedKey then
-            self:Notify({Title = "Verifying", Message = "Validating saved license...", Duration = 2, Type = "info"})
-            task.wait(0.3)
+            function UI:Error() callbackResult.valid = false end
             
-            local valid, status = self:_validateKey(savedKey)
-            if valid then
-                if status == "KEYLESS" then
-                    getgenv().SCRIPT_KEY = "KEYLESS"
-                    self:Notify({Title = "Granted", Message = "Access granted!", Duration = 2, Type = "success"})
-                else
-                    getgenv().SCRIPT_KEY = savedKey
-                    self:Notify({Title = "Welcome Back", Message = "License authenticated!", Duration = 2, Type = "success"})
-                end
-                if self._verifiedCallback then self._verifiedCallback() end
-                return self
-            else
-                self:_clearKey()
-                self:Notify({Title = "Expired", Message = "Saved license has expired", Duration = 3, Type = "warning"})
-                task.wait(1)
-            end
+            pcall(function()
+                self._connectCallback(keyToCheck, UI)
+            end)
+            result = callbackResult
         end
         
-        -- Check if service is keyless (Junkie keyless mode)
-        if self._junkie then
-            self:Notify({Title = "Verifying", Message = "Checking service...", Duration = 2, Type = "info"})
-            task.wait(0.3)
-            
-            if self:_checkKeyless() then
+        if result and (result.valid or result.message == "KEY_VALID" or result.message == "KEYLESS") then
+            if result.message == "KEYLESS" then
                 getgenv().SCRIPT_KEY = "KEYLESS"
-                self:Notify({Title = "Granted", Message = "Access granted!", Duration = 2, Type = "success"})
-                if self._verifiedCallback then self._verifiedCallback() end
+                self:Notify("Welcome", "Access granted!", 2, "success")
+            else
+                if keySource == "getgenv" then
+                    self:_saveKey(keyToCheck)
+                end
+                getgenv().SCRIPT_KEY = keyToCheck
+                self:Notify("Welcome Back", "License authenticated!", 2, "success")
+            end
+            
+            if self._verifiedCallback then
+                task.spawn(self._verifiedCallback)
+            end
+            return self
+        else
+            if keySource == "saved" then
+                self:_clearKey()
+                self:Notify("Expired", "Saved license has expired", 3, "warning")
+            end
+            getgenv().SCRIPT_KEY = nil
+            task.wait(1)
+        end
+    else
+        -- No key to check - try keyless detection for Junkie
+        if self._junkie then
+            local result = self:_validateWithJunkie("KEYLESS_CHECK")
+            if result and result.valid and result.message == "KEYLESS" then
+                getgenv().SCRIPT_KEY = "KEYLESS"
+                self:Notify("Welcome", "Access granted!", 2, "success")
+                
+                if self._verifiedCallback then
+                    task.spawn(self._verifiedCallback)
+                end
                 return self
             end
         end
@@ -1139,6 +1149,11 @@ function Arqel:Await()
     -- Wait for validation
     while not getgenv().SCRIPT_KEY do
         task.wait(0.1)
+    end
+    
+    -- Call verified callback after UI completes
+    if self._verifiedCallback then
+        task.spawn(self._verifiedCallback)
     end
     
     return self
