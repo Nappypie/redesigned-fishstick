@@ -1,6 +1,6 @@
 --[[
     Arqel Key System
-    Version: 1.0.1
+    Version: 1.0.2
     
     Create + Connect API
 ]]
@@ -384,6 +384,20 @@ function Arqel:_validateKey(key)
     end
     
     return false, "NO_VALIDATOR", "No validator configured"
+end
+
+function Arqel:_checkKeyless()
+    if not self._junkie then return false end
+    
+    local ok, result = pcall(function()
+        return self._junkie.check_key("")
+    end)
+    
+    if ok and result and (result.message == "KEYLESS" or (result.valid and result.message == "KEYLESS")) then
+        return true
+    end
+    
+    return false
 end
 
 function Arqel:_enableBlur()
@@ -1044,7 +1058,7 @@ function Arqel:_build()
 end
 
 function Arqel:Await()
-    -- Keyless mode - skip everything
+    -- User forced keyless mode
     if self.Keyless then
         self:Notify({Title = "Granted", Message = "Access granted!", Duration = 2, Type = "success"})
         getgenv().SCRIPT_KEY = "KEYLESS"
@@ -1052,10 +1066,9 @@ function Arqel:Await()
         return self
     end
     
-    -- Check if we have a validator
     local hasValidator = self:_hasValidator()
     
-    -- Check external key
+    -- Check external key first
     if getgenv().SCRIPT_KEY and getgenv().SCRIPT_KEY ~= "" then
         if hasValidator then
             local key = getgenv().SCRIPT_KEY
@@ -1074,11 +1087,9 @@ function Arqel:Await()
                 if self._verifiedCallback then self._verifiedCallback() end
                 return self
             else
-                -- Invalid - clear the key so while loop works
                 getgenv().SCRIPT_KEY = nil
             end
         else
-            -- No validator - clear the key
             getgenv().SCRIPT_KEY = nil
         end
     end
@@ -1105,6 +1116,19 @@ function Arqel:Await()
                 self:_clearKey()
                 self:Notify({Title = "Expired", Message = "Saved license has expired", Duration = 3, Type = "warning"})
                 task.wait(1)
+            end
+        end
+        
+        -- Check if service is keyless (Junkie keyless mode)
+        if self._junkie then
+            self:Notify({Title = "Verifying", Message = "Checking service...", Duration = 2, Type = "info"})
+            task.wait(0.3)
+            
+            if self:_checkKeyless() then
+                getgenv().SCRIPT_KEY = "KEYLESS"
+                self:Notify({Title = "Granted", Message = "Access granted!", Duration = 2, Type = "success"})
+                if self._verifiedCallback then self._verifiedCallback() end
+                return self
             end
         end
     end
