@@ -1,12 +1,11 @@
 --[[
-    Arqel Key System
-    Version: 1.0.3
+    Arqel Key System API
+    Version: 1.0.0
     
-    Create + Connect API
+    Modes:
+    - :Launch() for custom validation
+    - :LaunchJunkie({...}) for Junkie Development
 ]]
-
-local Arqel = {}
-Arqel.__index = Arqel
 
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
@@ -15,7 +14,76 @@ local HttpService = game:GetService("HttpService")
 local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
 local Lighting = game:GetService("Lighting")
-local Players = game:GetService("Players")
+
+--================================--
+--          ARQEL API             --
+--================================--
+
+local Arqel = {}
+
+-- Appearance
+Arqel.Appearance = {
+    Title = "Arqel",
+    Subtitle = "Enter your key to continue",
+    Icon = "rbxassetid://95721401302279",
+    IconSize = UDim2.new(0, 30, 0, 30)
+}
+
+-- Links
+Arqel.Links = {
+    GetKey = "",
+    Discord = ""
+}
+
+-- Storage
+Arqel.Storage = {
+    FileName = "Arqel_Key",
+    Remember = true,
+    AutoLoad = true
+}
+
+-- Options
+Arqel.Options = {
+    Keyless = nil, -- nil = auto-detect, true = force keyless, false = force key
+    Blur = true,
+    Draggable = true
+}
+
+-- Theme
+Arqel.Theme = {
+    Accent = Color3.fromRGB(139, 0, 0),
+    AccentHover = Color3.fromRGB(170, 20, 20),
+    Background = Color3.fromRGB(15, 15, 15),
+    Header = Color3.fromRGB(20, 20, 20),
+    Input = Color3.fromRGB(25, 25, 25),
+    Text = Color3.fromRGB(255, 255, 255),
+    TextDim = Color3.fromRGB(120, 120, 120),
+    Success = Color3.fromRGB(50, 205, 110),
+    Error = Color3.fromRGB(245, 70, 90),
+    Warning = Color3.fromRGB(255, 180, 50),
+    Discord = Color3.fromRGB(88, 101, 242)
+}
+
+-- Callbacks
+Arqel.Callbacks = {
+    OnVerify = nil,
+    OnSuccess = nil,
+    OnFail = nil,
+    OnClose = nil
+}
+
+--================================--
+--        INTERNAL CONFIG         --
+--================================--
+
+local Internal = {
+    Junkie = nil,
+    JunkieConfig = nil,
+    GUI = nil,
+    BlurEffect = nil,
+    NotificationList = {},
+    IsOpen = false
+}
 
 local Icons = {
     key = "rbxassetid://96510194465420",
@@ -29,147 +97,9 @@ local Icons = {
     close = "rbxassetid://6022668916"
 }
 
-Arqel.Themes = {
-    Arqel = {
-        background = Color3.fromRGB(15, 15, 15),
-        header = Color3.fromRGB(20, 20, 20),
-        input = Color3.fromRGB(25, 25, 25),
-        button = Color3.fromRGB(139, 0, 0),
-        buttonHover = Color3.fromRGB(170, 20, 20),
-        text = Color3.fromRGB(255, 255, 255),
-        textDim = Color3.fromRGB(120, 120, 120),
-        accent = Color3.fromRGB(139, 0, 0),
-        success = Color3.fromRGB(50, 205, 110),
-        error = Color3.fromRGB(245, 70, 90),
-        warning = Color3.fromRGB(255, 180, 50),
-        statusIdle = Color3.fromRGB(180, 80, 80),
-        discord = Color3.fromRGB(88, 101, 242),
-        discordHover = Color3.fromRGB(114, 137, 218),
-        divider = Color3.fromRGB(45, 45, 70)
-    },
-    Purple = {
-        background = Color3.fromRGB(10, 10, 20),
-        header = Color3.fromRGB(15, 15, 30),
-        input = Color3.fromRGB(20, 20, 40),
-        button = Color3.fromRGB(110, 60, 255),
-        buttonHover = Color3.fromRGB(130, 90, 255),
-        text = Color3.fromRGB(255, 255, 255),
-        textDim = Color3.fromRGB(160, 160, 200),
-        accent = Color3.fromRGB(110, 60, 255),
-        success = Color3.fromRGB(0, 220, 180),
-        error = Color3.fromRGB(255, 70, 90),
-        warning = Color3.fromRGB(255, 180, 50),
-        statusIdle = Color3.fromRGB(120, 100, 200),
-        discord = Color3.fromRGB(88, 101, 242),
-        discordHover = Color3.fromRGB(114, 137, 218),
-        divider = Color3.fromRGB(45, 45, 70)
-    },
-    Ocean = {
-        background = Color3.fromRGB(10, 15, 20),
-        header = Color3.fromRGB(15, 22, 30),
-        input = Color3.fromRGB(20, 30, 40),
-        button = Color3.fromRGB(0, 140, 200),
-        buttonHover = Color3.fromRGB(0, 170, 230),
-        text = Color3.fromRGB(255, 255, 255),
-        textDim = Color3.fromRGB(140, 170, 190),
-        accent = Color3.fromRGB(0, 180, 255),
-        success = Color3.fromRGB(50, 205, 110),
-        error = Color3.fromRGB(245, 70, 90),
-        warning = Color3.fromRGB(255, 180, 50),
-        statusIdle = Color3.fromRGB(100, 150, 180),
-        discord = Color3.fromRGB(88, 101, 242),
-        discordHover = Color3.fromRGB(114, 137, 218),
-        divider = Color3.fromRGB(40, 60, 80)
-    },
-    Midnight = {
-        background = Color3.fromRGB(8, 10, 18),
-        header = Color3.fromRGB(12, 15, 28),
-        input = Color3.fromRGB(18, 22, 38),
-        button = Color3.fromRGB(60, 80, 180),
-        buttonHover = Color3.fromRGB(80, 100, 210),
-        text = Color3.fromRGB(255, 255, 255),
-        textDim = Color3.fromRGB(130, 140, 180),
-        accent = Color3.fromRGB(80, 100, 220),
-        success = Color3.fromRGB(50, 205, 110),
-        error = Color3.fromRGB(245, 70, 90),
-        warning = Color3.fromRGB(255, 180, 50),
-        statusIdle = Color3.fromRGB(100, 110, 160),
-        discord = Color3.fromRGB(88, 101, 242),
-        discordHover = Color3.fromRGB(114, 137, 218),
-        divider = Color3.fromRGB(35, 40, 70)
-    },
-    Mint = {
-        background = Color3.fromRGB(10, 18, 15),
-        header = Color3.fromRGB(15, 25, 22),
-        input = Color3.fromRGB(20, 32, 28),
-        button = Color3.fromRGB(0, 160, 120),
-        buttonHover = Color3.fromRGB(0, 190, 145),
-        text = Color3.fromRGB(255, 255, 255),
-        textDim = Color3.fromRGB(140, 180, 170),
-        accent = Color3.fromRGB(0, 210, 150),
-        success = Color3.fromRGB(50, 205, 110),
-        error = Color3.fromRGB(245, 70, 90),
-        warning = Color3.fromRGB(255, 180, 50),
-        statusIdle = Color3.fromRGB(100, 160, 140),
-        discord = Color3.fromRGB(88, 101, 242),
-        discordHover = Color3.fromRGB(114, 137, 218),
-        divider = Color3.fromRGB(35, 55, 48)
-    },
-    Blood = {
-        background = Color3.fromRGB(12, 8, 8),
-        header = Color3.fromRGB(20, 12, 12),
-        input = Color3.fromRGB(28, 18, 18),
-        button = Color3.fromRGB(160, 30, 50),
-        buttonHover = Color3.fromRGB(200, 45, 65),
-        text = Color3.fromRGB(255, 255, 255),
-        textDim = Color3.fromRGB(180, 140, 140),
-        accent = Color3.fromRGB(200, 30, 60),
-        success = Color3.fromRGB(50, 205, 110),
-        error = Color3.fromRGB(255, 80, 80),
-        warning = Color3.fromRGB(255, 180, 50),
-        statusIdle = Color3.fromRGB(160, 100, 100),
-        discord = Color3.fromRGB(88, 101, 242),
-        discordHover = Color3.fromRGB(114, 137, 218),
-        divider = Color3.fromRGB(60, 35, 35)
-    },
-    Solar = {
-        background = Color3.fromRGB(18, 14, 10),
-        header = Color3.fromRGB(25, 20, 15),
-        input = Color3.fromRGB(35, 28, 20),
-        button = Color3.fromRGB(200, 130, 30),
-        buttonHover = Color3.fromRGB(230, 155, 45),
-        text = Color3.fromRGB(255, 255, 255),
-        textDim = Color3.fromRGB(190, 170, 140),
-        accent = Color3.fromRGB(255, 160, 40),
-        success = Color3.fromRGB(50, 205, 110),
-        error = Color3.fromRGB(245, 70, 90),
-        warning = Color3.fromRGB(255, 200, 80),
-        statusIdle = Color3.fromRGB(180, 150, 100),
-        discord = Color3.fromRGB(88, 101, 242),
-        discordHover = Color3.fromRGB(114, 137, 218),
-        divider = Color3.fromRGB(60, 50, 35)
-    },
-    Rose = {
-        background = Color3.fromRGB(18, 12, 15),
-        header = Color3.fromRGB(25, 18, 22),
-        input = Color3.fromRGB(35, 25, 30),
-        button = Color3.fromRGB(200, 80, 120),
-        buttonHover = Color3.fromRGB(230, 100, 145),
-        text = Color3.fromRGB(255, 255, 255),
-        textDim = Color3.fromRGB(190, 160, 175),
-        accent = Color3.fromRGB(255, 100, 150),
-        success = Color3.fromRGB(50, 205, 110),
-        error = Color3.fromRGB(245, 70, 90),
-        warning = Color3.fromRGB(255, 180, 50),
-        statusIdle = Color3.fromRGB(180, 130, 150),
-        discord = Color3.fromRGB(88, 101, 242),
-        discordHover = Color3.fromRGB(114, 137, 218),
-        divider = Color3.fromRGB(60, 40, 50)
-    }
-}
-
-local NotificationList = {}
-local blurEffect = nil
+--================================--
+--         UTILITIES              --
+--================================--
 
 local function isMobile()
     return UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
@@ -187,137 +117,18 @@ local function hasFileSystem()
     return ok1 and ok2 and ok3
 end
 
-function Arqel.Create(options)
-    options = options or {}
-    local self = setmetatable({}, Arqel)
-    
-    self.Title = options.Title or "Arqel"
-    self.Description = options.Description or "Awaiting license verification"
-    self.Logo = options.Logo or ""
-    self.LogoSize = options.LogoSize or UDim2.new(0, 30, 0, 30)
-    self.Discord = options.Discord or ""
-    self.KeyLink = options.KeyLink or ""
-    self.Directory = options.Directory or "Arqel"
-    self.Theme = options.Theme or "Arqel"
-    self.Colors = options.Colors or {}
-    self.Blur = options.Blur ~= false
-    self.BlurSize = options.BlurSize or 24
-    self.Keyless = options.Keyless or false
-    self.Premium = options.Premium or false
-    self.RememberKey = options.RememberKey ~= false
-    
-    self._junkie = nil
-    self._connectCallback = nil
-    self._verifiedCallback = nil
-    
-    return self
+local fileSystemSupported = hasFileSystem()
+
+local function saveKey(key)
+    if not fileSystemSupported or not Arqel.Storage.Remember then return false end
+    return pcall(function() writefile(Arqel.Storage.FileName .. ".txt", key) end)
 end
 
-function Arqel:SetKeyLink(url)
-    self.KeyLink = url
-    return self
-end
-
-function Arqel:SetDiscord(url)
-    self.Discord = url
-    return self
-end
-
-function Arqel:SetDirectory(name)
-    self.Directory = name
-    return self
-end
-
-function Arqel:SetTheme(name)
-    if Arqel.Themes[name] then
-        self.Theme = name
-    end
-    return self
-end
-
-function Arqel:SetColors(colors)
-    for k, v in pairs(colors) do
-        self.Colors[k] = v
-    end
-    return self
-end
-
-function Arqel:SetLogo(id, size)
-    self.Logo = id
-    if size then self.LogoSize = size end
-    return self
-end
-
-function Arqel:EnableBlur(enabled, size)
-    self.Blur = enabled
-    if size then self.BlurSize = size end
-    return self
-end
-
-function Arqel:SetKeyless(enabled)
-    self.Keyless = enabled
-    return self
-end
-
-function Arqel:SetPremium(enabled)
-    self.Premium = enabled
-    return self
-end
-
-function Arqel:SetRememberKey(enabled)
-    self.RememberKey = enabled
-    return self
-end
-
-function Arqel:UseJunkie(junkie)
-    self._junkie = junkie
-    return self
-end
-
-function Arqel:Connect(callback)
-    self._connectCallback = callback
-    return self
-end
-
-function Arqel:OnVerified(callback)
-    self._verifiedCallback = callback
-    return self
-end
-
-function Arqel:_getColors()
-    local base = Arqel.Themes[self.Theme] or Arqel.Themes.Arqel
-    local merged = {}
-    for k, v in pairs(base) do merged[k] = v end
-    for k, v in pairs(self.Colors) do merged[k] = v end
-    return merged
-end
-
-function Arqel:_getKeyPath()
-    return self.Directory .. "/license.txt"
-end
-
-function Arqel:_ensureFolder()
-    if not hasFileSystem() then return false end
-    pcall(function()
-        if not isfolder(self.Directory) then
-            makefolder(self.Directory)
-        end
-    end)
-    return true
-end
-
-function Arqel:_saveKey(key)
-    if not hasFileSystem() or not self.RememberKey then return false end
-    self:_ensureFolder()
-    local ok = pcall(function() writefile(self:_getKeyPath(), key) end)
-    return ok
-end
-
-function Arqel:_loadKey()
-    if not hasFileSystem() or not self.RememberKey then return nil end
+local function loadKey()
+    if not fileSystemSupported then return nil end
     local ok, content = pcall(function()
-        if isfile(self:_getKeyPath()) then
-            return readfile(self:_getKeyPath())
+        if isfile(Arqel.Storage.FileName .. ".txt") then 
+            return readfile(Arqel.Storage.FileName .. ".txt") 
         end
         return nil
     end)
@@ -325,56 +136,47 @@ function Arqel:_loadKey()
     return nil
 end
 
-function Arqel:_clearKey()
-    if not hasFileSystem() then return false end
-    pcall(function()
-        if isfile(self:_getKeyPath()) then
-            delfile(self:_getKeyPath())
-        end
-    end)
-    return true
+local function clearKey()
+    if not fileSystemSupported then return false end
+    return pcall(function() delfile(Arqel.Storage.FileName .. ".txt") end)
 end
 
-function Arqel:_enableBlur()
-    if not self.Blur then return end
-    
-    local existing = Lighting:FindFirstChild("ArqelKeySystemBlur")
-    if existing then existing:Destroy() end
-    
-    blurEffect = Instance.new("BlurEffect")
-    blurEffect.Name = "ArqelKeySystemBlur"
-    blurEffect.Size = 0
-    blurEffect.Parent = Lighting
-    
-    TweenService:Create(blurEffect, TweenInfo.new(0.4, Enum.EasingStyle.Quart), {
-        Size = self.BlurSize
-    }):Play()
+local function enableBlur()
+    if not Arqel.Options.Blur then return end
+    local existingBlur = Lighting:FindFirstChild("ArqelBlur")
+    if existingBlur then existingBlur:Destroy() end
+    Internal.BlurEffect = Instance.new("BlurEffect")
+    Internal.BlurEffect.Name = "ArqelBlur"
+    Internal.BlurEffect.Size = 0
+    Internal.BlurEffect.Parent = Lighting
+    TweenService:Create(Internal.BlurEffect, TweenInfo.new(0.4, Enum.EasingStyle.Quart), {Size = 24}):Play()
 end
 
-function Arqel:_disableBlur()
-    if blurEffect and blurEffect.Parent then
-        TweenService:Create(blurEffect, TweenInfo.new(0.3, Enum.EasingStyle.Quart), {
-            Size = 0
-        }):Play()
-        
+local function disableBlur()
+    if Internal.BlurEffect and Internal.BlurEffect.Parent then
+        TweenService:Create(Internal.BlurEffect, TweenInfo.new(0.3, Enum.EasingStyle.Quart), {Size = 0}):Play()
         task.delay(0.3, function()
-            if blurEffect and blurEffect.Parent then
-                blurEffect:Destroy()
-                blurEffect = nil
+            if Internal.BlurEffect and Internal.BlurEffect.Parent then
+                Internal.BlurEffect:Destroy()
+                Internal.BlurEffect = nil
             end
         end)
     else
-        local existing = Lighting:FindFirstChild("ArqelKeySystemBlur")
-        if existing then existing:Destroy() end
-        blurEffect = nil
+        local existingBlur = Lighting:FindFirstChild("ArqelBlur")
+        if existingBlur then existingBlur:Destroy() end
+        Internal.BlurEffect = nil
     end
 end
 
+--================================--
+--        NOTIFICATIONS           --
+--================================--
+
 function Arqel:Notify(title, message, duration, iconType)
-    local colors = self:_getColors()
+    duration = duration or 5
+    iconType = iconType or "info"
     
     local notifGui = Instance.new("ScreenGui")
-    notifGui.Name = "ArqelNotification"
     notifGui.ResetOnSpawn = false
     notifGui.DisplayOrder = 999999
     notifGui.Parent = CoreGui
@@ -387,93 +189,94 @@ function Arqel:Notify(title, message, duration, iconType)
     frame.Size = UDim2.new(0, width, 0, height)
     frame.Position = UDim2.new(1, width + 20, 1, -15)
     frame.AnchorPoint = Vector2.new(1, 1)
-    frame.BackgroundColor3 = colors.header
+    frame.BackgroundColor3 = Arqel.Theme.Header
     frame.BorderSizePixel = 0
     frame.Parent = notifGui
     
-    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 6)
+    local frameCorner = Instance.new("UICorner")
+    frameCorner.CornerRadius = UDim.new(0, 4)
+    frameCorner.Parent = frame
     
-    local stroke = Instance.new("UIStroke", frame)
-    stroke.Color = colors.accent
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = Arqel.Theme.Accent
     stroke.Thickness = 1
     stroke.Transparency = 0.7
+    stroke.Parent = frame
     
-    local progressBg = Instance.new("Frame", frame)
-    progressBg.Size = UDim2.new(1, 0, 0, 3)
-    progressBg.Position = UDim2.new(0, 0, 1, -3)
+    local progressBg = Instance.new("Frame")
+    progressBg.Size = UDim2.new(1, 0, 0, 4)
+    progressBg.Position = UDim2.new(0, 0, 1, -4)
     progressBg.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
     progressBg.BorderSizePixel = 0
+    progressBg.Parent = frame
     
-    local progressBar = Instance.new("Frame", progressBg)
+    local progressBar = Instance.new("Frame")
     progressBar.Size = UDim2.new(1, 0, 1, 0)
-    progressBar.BackgroundColor3 = colors.accent
+    progressBar.BackgroundColor3 = Arqel.Theme.Accent
     progressBar.BorderSizePixel = 0
+    progressBar.Parent = progressBg
     
     local iconSize = height - 35
-    local icon = Instance.new("ImageLabel", frame)
+    local icon = Instance.new("ImageLabel")
     icon.Size = UDim2.new(0, iconSize, 0, iconSize)
     icon.Position = UDim2.new(0, 14, 0.5, -2)
     icon.AnchorPoint = Vector2.new(0, 0.5)
     icon.BackgroundTransparency = 1
+    icon.ImageColor3 = Arqel.Theme.Text
     icon.ScaleType = Enum.ScaleType.Fit
+    icon.Parent = frame
     
-    if iconType == "success" then
-        icon.Image = Icons.check
-        icon.ImageColor3 = colors.success
-    elseif iconType == "error" then
-        icon.Image = Icons.alert
-        icon.ImageColor3 = colors.error
-    elseif iconType == "warning" then
-        icon.Image = Icons.alert
-        icon.ImageColor3 = colors.warning
-    elseif iconType == "shield" then
-        icon.Image = Icons.shield
-        icon.ImageColor3 = colors.accent
-    elseif iconType == "copy" then
-        icon.Image = Icons.copy
-        icon.ImageColor3 = colors.success
-    elseif iconType == "discord" then
-        icon.Image = Icons.discord
-        icon.ImageColor3 = colors.discord
-    elseif iconType == "close" then
-        icon.Image = Icons.close
-        icon.ImageColor3 = colors.error
+    local iconMap = {
+        success = {Icons.check, Arqel.Theme.Success},
+        error = {Icons.alert, Arqel.Theme.Error},
+        warning = {Icons.alert, Arqel.Theme.Warning},
+        info = {Icons.shield, Arqel.Theme.Accent},
+        key = {Icons.key, Arqel.Theme.Accent},
+        copy = {Icons.copy, Arqel.Theme.Success},
+        discord = {Icons.discord, Arqel.Theme.Discord},
+        close = {Icons.close, Arqel.Theme.Error}
+    }
+    
+    if iconMap[iconType] then
+        icon.Image = iconMap[iconType][1]
+        icon.ImageColor3 = iconMap[iconType][2]
     else
-        icon.Image = Icons.shield
-        icon.ImageColor3 = colors.accent
+        icon.Image = Arqel.Appearance.Icon
     end
     
     local textX = 14 + iconSize + 14
     
-    local titleLabel = Instance.new("TextLabel", frame)
+    local titleLabel = Instance.new("TextLabel")
     titleLabel.Size = UDim2.new(1, -(textX + 14), 0, 24)
     titleLabel.Position = UDim2.new(0, textX, 0, 12)
     titleLabel.BackgroundTransparency = 1
     titleLabel.Font = Enum.Font.GothamBold
     titleLabel.TextSize = math.clamp(15 * scale, 13, 18)
     titleLabel.TextXAlignment = Enum.TextXAlignment.Left
-    titleLabel.TextColor3 = colors.text
+    titleLabel.TextColor3 = Arqel.Theme.Text
     titleLabel.Text = title
     titleLabel.TextTruncate = Enum.TextTruncate.AtEnd
+    titleLabel.Parent = frame
     
-    local messageLabel = Instance.new("TextLabel", frame)
+    local messageLabel = Instance.new("TextLabel")
     messageLabel.Size = UDim2.new(1, -(textX + 14), 0, 22)
     messageLabel.Position = UDim2.new(0, textX, 0, 38)
     messageLabel.BackgroundTransparency = 1
-    messageLabel.Font = Enum.Font.Gotham
+    messageLabel.Font = Enum.Font.GothamMedium
     messageLabel.TextSize = math.clamp(13 * scale, 11, 15)
     messageLabel.TextXAlignment = Enum.TextXAlignment.Left
-    messageLabel.TextColor3 = colors.textDim
+    messageLabel.TextColor3 = Arqel.Theme.TextDim
     messageLabel.Text = message
     messageLabel.TextTruncate = Enum.TextTruncate.AtEnd
+    messageLabel.Parent = frame
     
     local id = tick() .. HttpService:GenerateGUID(false)
-    table.insert(NotificationList, {id = id, frame = frame, gui = notifGui, height = height})
+    table.insert(Internal.NotificationList, {id = id, frame = frame, gui = notifGui, height = height})
     
     local function restack()
         local yOffset = 0
-        for i = #NotificationList, 1, -1 do
-            local n = NotificationList[i]
+        for i = #Internal.NotificationList, 1, -1 do
+            local n = Internal.NotificationList[i]
             if n and n.frame and n.frame.Parent then
                 TweenService:Create(n.frame, TweenInfo.new(0.3, Enum.EasingStyle.Quart), {
                     Position = UDim2.new(1, -15, 1, -15 - yOffset)
@@ -491,9 +294,9 @@ function Arqel:Notify(title, message, duration, iconType)
     restack()
     
     local function dismiss()
-        for i, n in ipairs(NotificationList) do
+        for i, n in ipairs(Internal.NotificationList) do
             if n.id == id then
-                table.remove(NotificationList, i)
+                table.remove(Internal.NotificationList, i)
                 break
             end
         end
@@ -512,184 +315,556 @@ function Arqel:Notify(title, message, duration, iconType)
         task.delay(duration, dismiss)
     end
     
-    local btn = Instance.new("TextButton", frame)
-    btn.Size = UDim2.new(1, 0, 1, 0)
-    btn.BackgroundTransparency = 1
-    btn.Text = ""
-    btn.MouseButton1Click:Connect(dismiss)
+    local clickButton = Instance.new("TextButton")
+    clickButton.Size = UDim2.new(1, 0, 1, 0)
+    clickButton.BackgroundTransparency = 1
+    clickButton.Text = ""
+    clickButton.Parent = frame
+    clickButton.MouseButton1Click:Connect(dismiss)
 end
 
-function Arqel:_build()
-    local colors = self:_getColors()
-    
+--================================--
+--        KEYLESS UI              --
+--================================--
+
+local function BuildKeylessUI()
     local oldGui = CoreGui:FindFirstChild("ArqelKeySystem")
     if oldGui then oldGui:Destroy() end
     
-    self:_enableBlur()
+    enableBlur()
+    
+    local mobile = isMobile()
+    
+    local gui = Instance.new("ScreenGui")
+    gui.Name = "ArqelKeySystem"
+    gui.ResetOnSpawn = false
+    gui.IgnoreGuiInset = true
+    gui.Parent = CoreGui
+    Internal.GUI = gui
+    Internal.IsOpen = true
+    
+    local main = Instance.new("Frame")
+    main.Size = UDim2.new(0, 300, 0, 265)
+    main.Position = UDim2.new(0.5, 0, 1.5, 0)
+    main.AnchorPoint = Vector2.new(0.5, 0.5)
+    main.BackgroundColor3 = Arqel.Theme.Background
+    main.BorderSizePixel = 0
+    main.Parent = gui
+    
+    local mainCorner = Instance.new("UICorner")
+    mainCorner.CornerRadius = UDim.new(0, 4)
+    mainCorner.Parent = main
+    
+    local mainStroke = Instance.new("UIStroke")
+    mainStroke.Color = Arqel.Theme.Accent
+    mainStroke.Thickness = 2
+    mainStroke.Transparency = 0.4
+    mainStroke.Parent = main
+    
+    -- Header
+    local header = Instance.new("Frame")
+    header.Size = UDim2.new(1, 0, 0, 50)
+    header.BackgroundColor3 = Arqel.Theme.Header
+    header.BorderSizePixel = 0
+    header.Active = true
+    header.Parent = main
+    
+    local headerCorner = Instance.new("UICorner")
+    headerCorner.CornerRadius = UDim.new(0, 4)
+    headerCorner.Parent = header
+    
+    local headerFix = Instance.new("Frame")
+    headerFix.Size = UDim2.new(1, 0, 0, 8)
+    headerFix.Position = UDim2.new(0, 0, 1, -8)
+    headerFix.BackgroundColor3 = Arqel.Theme.Header
+    headerFix.BorderSizePixel = 0
+    headerFix.Parent = header
+    
+    local headerLine = Instance.new("Frame")
+    headerLine.Size = UDim2.new(1, 0, 0, 1)
+    headerLine.Position = UDim2.new(0, 0, 1, 0)
+    headerLine.BackgroundColor3 = Arqel.Theme.Accent
+    headerLine.BackgroundTransparency = 0.6
+    headerLine.BorderSizePixel = 0
+    headerLine.Parent = header
+    
+    -- Logo
+    local logo = Instance.new("ImageLabel")
+    logo.Size = Arqel.Appearance.IconSize
+    logo.Position = UDim2.new(0, 14, 0.5, 0)
+    logo.AnchorPoint = Vector2.new(0, 0.5)
+    logo.BackgroundTransparency = 1
+    logo.Image = Arqel.Appearance.Icon
+    logo.ImageColor3 = Arqel.Theme.Text
+    logo.ScaleType = Enum.ScaleType.Fit
+    logo.Parent = header
+    
+    -- Title
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, -90, 1, 0)
+    title.Position = UDim2.new(0, 14 + Arqel.Appearance.IconSize.X.Offset + 10, 0, 0)
+    title.BackgroundTransparency = 1
+    title.Text = Arqel.Appearance.Title
+    title.TextColor3 = Arqel.Theme.Text
+    title.TextSize = mobile and 24 or 26
+    title.Font = Enum.Font.GothamBold
+    title.TextXAlignment = Enum.TextXAlignment.Left
+    title.Parent = header
+    
+    -- Close button
+    local closeBtn = Instance.new("ImageButton")
+    closeBtn.Size = UDim2.new(0, 18, 0, 18)
+    closeBtn.Position = UDim2.new(1, -14, 0.5, 0)
+    closeBtn.AnchorPoint = Vector2.new(1, 0.5)
+    closeBtn.BackgroundTransparency = 1
+    closeBtn.Image = Icons.close
+    closeBtn.ImageColor3 = Arqel.Theme.TextDim
+    closeBtn.ScaleType = Enum.ScaleType.Fit
+    closeBtn.Parent = header
+    
+    closeBtn.MouseEnter:Connect(function()
+        TweenService:Create(closeBtn, TweenInfo.new(0.15), {ImageColor3 = Arqel.Theme.Error}):Play()
+    end)
+    closeBtn.MouseLeave:Connect(function()
+        TweenService:Create(closeBtn, TweenInfo.new(0.15), {ImageColor3 = Arqel.Theme.TextDim}):Play()
+    end)
+    
+    local contentY = 60
+    
+    -- Success box
+    local successBox = Instance.new("Frame")
+    successBox.Size = UDim2.new(0.94, 0, 0, 52)
+    successBox.Position = UDim2.new(0.5, 0, 0, contentY)
+    successBox.AnchorPoint = Vector2.new(0.5, 0)
+    successBox.BackgroundColor3 = Arqel.Theme.Success
+    successBox.BackgroundTransparency = 0.85
+    successBox.BorderSizePixel = 0
+    successBox.Parent = main
+    
+    local successCorner = Instance.new("UICorner")
+    successCorner.CornerRadius = UDim.new(0, 4)
+    successCorner.Parent = successBox
+    
+    local successStroke = Instance.new("UIStroke")
+    successStroke.Color = Arqel.Theme.Success
+    successStroke.Thickness = 1
+    successStroke.Transparency = 0.5
+    successStroke.Parent = successBox
+    
+    local checkIcon = Instance.new("ImageLabel")
+    checkIcon.Size = UDim2.new(0, 24, 0, 24)
+    checkIcon.Position = UDim2.new(0, 16, 0.5, 0)
+    checkIcon.AnchorPoint = Vector2.new(0, 0.5)
+    checkIcon.BackgroundTransparency = 1
+    checkIcon.Image = Icons.check
+    checkIcon.ImageColor3 = Arqel.Theme.Success
+    checkIcon.ScaleType = Enum.ScaleType.Fit
+    checkIcon.Parent = successBox
+    
+    local successText = Instance.new("TextLabel")
+    successText.Size = UDim2.new(1, -60, 1, 0)
+    successText.Position = UDim2.new(0, 52, 0, 0)
+    successText.BackgroundTransparency = 1
+    successText.Text = "Access Granted"
+    successText.TextColor3 = Arqel.Theme.Success
+    successText.TextSize = mobile and 17 or 18
+    successText.Font = Enum.Font.GothamBold
+    successText.TextXAlignment = Enum.TextXAlignment.Left
+    successText.Parent = successBox
+    
+    -- Keyless text
+    local keylessText = Instance.new("TextLabel")
+    keylessText.Size = UDim2.new(1, 0, 0, 20)
+    keylessText.Position = UDim2.new(0.5, 0, 0, contentY + 60)
+    keylessText.AnchorPoint = Vector2.new(0.5, 0)
+    keylessText.BackgroundTransparency = 1
+    keylessText.Text = "Keyless mode active"
+    keylessText.TextColor3 = Arqel.Theme.TextDim
+    keylessText.TextSize = mobile and 14 or 15
+    keylessText.Font = Enum.Font.GothamBold
+    keylessText.Parent = main
+    
+    -- Divider
+    local divider = Instance.new("Frame")
+    divider.Size = UDim2.new(1, 0, 0, 3)
+    divider.Position = UDim2.new(0, 0, 0, contentY + 88)
+    divider.BackgroundColor3 = Color3.fromRGB(45, 45, 70)
+    divider.BorderSizePixel = 0
+    divider.Parent = main
+    
+    -- Launch button
+    local launchBtn = Instance.new("TextButton")
+    launchBtn.Size = UDim2.new(0.75, 0, 0, 42)
+    launchBtn.Position = UDim2.new(0.5, 0, 0, contentY + 103)
+    launchBtn.AnchorPoint = Vector2.new(0.5, 0)
+    launchBtn.BackgroundColor3 = Arqel.Theme.Accent
+    launchBtn.BorderSizePixel = 0
+    launchBtn.Text = ""
+    launchBtn.AutoButtonColor = false
+    launchBtn.Parent = main
+    
+    local launchCorner = Instance.new("UICorner")
+    launchCorner.CornerRadius = UDim.new(0, 4)
+    launchCorner.Parent = launchBtn
+    
+    local launchContent = Instance.new("Frame")
+    launchContent.Size = UDim2.new(1, 0, 1, 0)
+    launchContent.BackgroundTransparency = 1
+    launchContent.Parent = launchBtn
+    
+    local launchLayout = Instance.new("UIListLayout")
+    launchLayout.FillDirection = Enum.FillDirection.Horizontal
+    launchLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    launchLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+    launchLayout.Padding = UDim.new(0, 8)
+    launchLayout.Parent = launchContent
+    
+    local launchIcon = Instance.new("ImageLabel")
+    launchIcon.Size = UDim2.new(0, 18, 0, 18)
+    launchIcon.BackgroundTransparency = 1
+    launchIcon.Image = Icons.shield
+    launchIcon.ImageColor3 = Arqel.Theme.Text
+    launchIcon.ScaleType = Enum.ScaleType.Fit
+    launchIcon.LayoutOrder = 1
+    launchIcon.Parent = launchContent
+    
+    local launchLabel = Instance.new("TextLabel")
+    launchLabel.Size = UDim2.new(0, 0, 0, 18)
+    launchLabel.AutomaticSize = Enum.AutomaticSize.X
+    launchLabel.BackgroundTransparency = 1
+    launchLabel.Text = "Launch Script"
+    launchLabel.TextColor3 = Arqel.Theme.Text
+    launchLabel.TextSize = mobile and 14 or 15
+    launchLabel.Font = Enum.Font.GothamBold
+    launchLabel.LayoutOrder = 2
+    launchLabel.Parent = launchContent
+    
+    launchBtn.MouseEnter:Connect(function()
+        TweenService:Create(launchBtn, TweenInfo.new(0.15), {BackgroundColor3 = Arqel.Theme.AccentHover}):Play()
+    end)
+    launchBtn.MouseLeave:Connect(function()
+        TweenService:Create(launchBtn, TweenInfo.new(0.15), {BackgroundColor3 = Arqel.Theme.Accent}):Play()
+    end)
+    
+    -- Discord button
+    local discordBtn = Instance.new("TextButton")
+    discordBtn.Size = UDim2.new(0, 36, 0, 36)
+    discordBtn.Position = UDim2.new(0.5, 0, 0, contentY + 153)
+    discordBtn.AnchorPoint = Vector2.new(0.5, 0)
+    discordBtn.BackgroundColor3 = Arqel.Theme.Background
+    discordBtn.BorderSizePixel = 0
+    discordBtn.Text = ""
+    discordBtn.AutoButtonColor = false
+    discordBtn.Parent = main
+    
+    local discordCorner = Instance.new("UICorner")
+    discordCorner.CornerRadius = UDim.new(0, 4)
+    discordCorner.Parent = discordBtn
+    
+    local discordIcon = Instance.new("ImageLabel")
+    discordIcon.Size = UDim2.new(0, 18, 0, 18)
+    discordIcon.Position = UDim2.new(0.5, 0, 0.5, 0)
+    discordIcon.AnchorPoint = Vector2.new(0.5, 0.5)
+    discordIcon.BackgroundTransparency = 1
+    discordIcon.Image = Icons.discord
+    discordIcon.ImageColor3 = Arqel.Theme.Discord
+    discordIcon.ScaleType = Enum.ScaleType.Fit
+    discordIcon.Parent = discordBtn
+    
+    discordBtn.MouseEnter:Connect(function()
+        TweenService:Create(discordIcon, TweenInfo.new(0.15), {ImageColor3 = Color3.fromRGB(114, 137, 218)}):Play()
+    end)
+    discordBtn.MouseLeave:Connect(function()
+        TweenService:Create(discordIcon, TweenInfo.new(0.15), {ImageColor3 = Arqel.Theme.Discord}):Play()
+    end)
+    
+    local function closeUI()
+        Internal.IsOpen = false
+        disableBlur()
+        TweenService:Create(main, TweenInfo.new(0.4, Enum.EasingStyle.Quart), {
+            Position = UDim2.new(0.5, 0, -0.5, 0),
+            BackgroundTransparency = 1
+        }):Play()
+        TweenService:Create(mainStroke, TweenInfo.new(0.3), {Transparency = 1}):Play()
+        task.wait(0.4)
+        gui:Destroy()
+        Internal.GUI = nil
+        
+        if Arqel.Callbacks.OnClose then
+            Arqel.Callbacks.OnClose()
+        end
+    end
+    
+    closeBtn.MouseButton1Click:Connect(function()
+        Arqel:Notify("Goodbye", "See you next time!", 2, "close")
+        closeUI()
+    end)
+    
+    launchBtn.MouseButton1Click:Connect(function()
+        Arqel:Notify("Launching", "Script loaded successfully!", 2, "success")
+        getgenv().SCRIPT_KEY = "KEYLESS"
+        closeUI()
+        
+        if Arqel.Callbacks.OnSuccess then
+            Arqel.Callbacks.OnSuccess()
+        end
+    end)
+    
+    discordBtn.MouseButton1Click:Connect(function()
+        if Arqel.Links.Discord and Arqel.Links.Discord ~= "" then
+            Arqel:Notify("Discord", "Invite link copied!", 2, "discord")
+            pcall(function() setclipboard(Arqel.Links.Discord) end)
+        end
+    end)
+    
+    -- Dragging
+    if Arqel.Options.Draggable then
+        local dragging, dragStart, startPos
+        
+        header.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                dragging = true
+                dragStart = input.Position
+                startPos = main.Position
+                input.Changed:Connect(function()
+                    if input.UserInputState == Enum.UserInputState.End then
+                        dragging = false
+                    end
+                end)
+            end
+        end)
+        
+        UserInputService.InputChanged:Connect(function(input)
+            if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+                local delta = input.Position - dragStart
+                main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+            end
+        end)
+    end
+    
+    -- Animate in
+    TweenService:Create(main, TweenInfo.new(0.5, Enum.EasingStyle.Quart), {
+        Position = UDim2.new(0.5, 0, 0.5, 0)
+    }):Play()
+    
+    checkIcon.Size = UDim2.new(0, 0, 0, 0)
+    task.delay(0.3, function()
+        TweenService:Create(checkIcon, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+            Size = UDim2.new(0, 24, 0, 24)
+        }):Play()
+    end)
+    
+    return gui
+end
+
+--================================--
+--         MAIN KEY UI            --
+--================================--
+
+local function BuildKeyUI()
+    local oldGui = CoreGui:FindFirstChild("ArqelKeySystem")
+    if oldGui then oldGui:Destroy() end
+    
+    enableBlur()
     
     local mobile = isMobile()
     local scale = getScale()
     
     local windowWidth = mobile and math.clamp(400 * scale, 320, 440) or 400
     local windowHeight = mobile and math.clamp(360 * scale, 320, 400) or 360
-    local headerHeight = 50
     local elementHeight = mobile and math.clamp(56 * scale, 48, 62) or 56
     local buttonHeight = mobile and math.clamp(42 * scale, 38, 48) or 42
     local statusHeight = mobile and math.clamp(60 * scale, 52, 68) or 60
-    local cornerRadius = 6
-    local padding = 14
-    local gap = 10
-    local logoSize = self.LogoSize.X.Offset
     
-    local screenGui = Instance.new("ScreenGui")
-    screenGui.Name = "ArqelKeySystem"
-    screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    screenGui.ResetOnSpawn = false
-    screenGui.IgnoreGuiInset = true
-    screenGui.Parent = CoreGui
+    local gui = Instance.new("ScreenGui")
+    gui.Name = "ArqelKeySystem"
+    gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    gui.ResetOnSpawn = false
+    gui.IgnoreGuiInset = true
+    gui.Parent = CoreGui
+    Internal.GUI = gui
+    Internal.IsOpen = true
     
-    local mainFrame = Instance.new("Frame", screenGui)
-    mainFrame.Size = UDim2.new(0, windowWidth, 0, windowHeight)
-    mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
-    mainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
-    mainFrame.BackgroundColor3 = colors.background
-    mainFrame.BorderSizePixel = 0
+    local main = Instance.new("Frame")
+    main.Size = UDim2.new(0, windowWidth, 0, windowHeight)
+    main.Position = UDim2.new(0.5, 0, 0.5, 0)
+    main.AnchorPoint = Vector2.new(0.5, 0.5)
+    main.BackgroundColor3 = Arqel.Theme.Background
+    main.BorderSizePixel = 0
+    main.Parent = gui
     
-    Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, cornerRadius)
+    local mainCorner = Instance.new("UICorner")
+    mainCorner.CornerRadius = UDim.new(0, 4)
+    mainCorner.Parent = main
     
-    local mainStroke = Instance.new("UIStroke", mainFrame)
-    mainStroke.Color = colors.accent
+    local mainStroke = Instance.new("UIStroke")
+    mainStroke.Color = Arqel.Theme.Accent
     mainStroke.Thickness = 2
     mainStroke.Transparency = 0.4
+    mainStroke.Parent = main
     
-    local header = Instance.new("Frame", mainFrame)
-    header.Size = UDim2.new(1, 0, 0, headerHeight)
-    header.BackgroundColor3 = colors.header
+    -- Header
+    local header = Instance.new("Frame")
+    header.Size = UDim2.new(1, 0, 0, 50)
+    header.BackgroundColor3 = Arqel.Theme.Header
     header.BorderSizePixel = 0
     header.Active = true
+    header.Parent = main
     
-    Instance.new("UICorner", header).CornerRadius = UDim.new(0, cornerRadius)
+    local headerCorner = Instance.new("UICorner")
+    headerCorner.CornerRadius = UDim.new(0, 4)
+    headerCorner.Parent = header
     
-    local headerFix = Instance.new("Frame", header)
-    headerFix.Size = UDim2.new(1, 0, 0, cornerRadius + 2)
-    headerFix.Position = UDim2.new(0, 0, 1, -(cornerRadius + 2))
-    headerFix.BackgroundColor3 = colors.header
+    local headerFix = Instance.new("Frame")
+    headerFix.Size = UDim2.new(1, 0, 0, 6)
+    headerFix.Position = UDim2.new(0, 0, 1, -6)
+    headerFix.BackgroundColor3 = Arqel.Theme.Header
     headerFix.BorderSizePixel = 0
+    headerFix.Parent = header
     
-    local headerDivider = Instance.new("Frame", header)
-    headerDivider.Size = UDim2.new(1, 0, 0, 1)
-    headerDivider.Position = UDim2.new(0, 0, 1, 0)
-    headerDivider.BackgroundColor3 = colors.accent
-    headerDivider.BackgroundTransparency = 0.6
-    headerDivider.BorderSizePixel = 0
+    local headerLine = Instance.new("Frame")
+    headerLine.Size = UDim2.new(1, 0, 0, 1)
+    headerLine.Position = UDim2.new(0, 0, 1, 0)
+    headerLine.BackgroundColor3 = Arqel.Theme.Accent
+    headerLine.BackgroundTransparency = 0.6
+    headerLine.BorderSizePixel = 0
+    headerLine.Parent = header
     
-    local titleOffset = padding
-    if self.Logo and self.Logo ~= "" then
-        local logo = Instance.new("ImageLabel", header)
-        logo.Size = self.LogoSize
-        logo.Position = UDim2.new(0, padding, 0.5, 0)
-        logo.AnchorPoint = Vector2.new(0, 0.5)
-        logo.BackgroundTransparency = 1
-        logo.Image = self.Logo
-        logo.ImageColor3 = colors.text
-        logo.ScaleType = Enum.ScaleType.Fit
-        titleOffset = padding + logoSize + 10
-    end
+    -- Logo
+    local logo = Instance.new("ImageLabel")
+    logo.Size = Arqel.Appearance.IconSize
+    logo.Position = UDim2.new(0, 14, 0.5, 0)
+    logo.AnchorPoint = Vector2.new(0, 0.5)
+    logo.BackgroundTransparency = 1
+    logo.Image = Arqel.Appearance.Icon
+    logo.ImageColor3 = Arqel.Theme.Text
+    logo.ScaleType = Enum.ScaleType.Fit
+    logo.Parent = header
     
-    local titleLabel = Instance.new("TextLabel", header)
+    -- Title
+    local titleLabel = Instance.new("TextLabel")
     titleLabel.Size = UDim2.new(1, -90, 1, 0)
-    titleLabel.Position = UDim2.new(0, titleOffset, 0, 0)
+    titleLabel.Position = UDim2.new(0, 14 + Arqel.Appearance.IconSize.X.Offset + 10, 0, 0)
     titleLabel.BackgroundTransparency = 1
-    titleLabel.Text = self.Title
-    titleLabel.TextColor3 = colors.text
+    titleLabel.Text = Arqel.Appearance.Title
+    titleLabel.TextColor3 = Arqel.Theme.Text
     titleLabel.TextSize = mobile and 24 or 26
     titleLabel.Font = Enum.Font.GothamBold
     titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+    titleLabel.Parent = header
     
-    local closeBtn = Instance.new("ImageButton", header)
+    -- Close button
+    local closeBtn = Instance.new("ImageButton")
     closeBtn.Size = UDim2.new(0, 18, 0, 18)
-    closeBtn.Position = UDim2.new(1, -padding, 0.5, 0)
+    closeBtn.Position = UDim2.new(1, -14, 0.5, 0)
     closeBtn.AnchorPoint = Vector2.new(1, 0.5)
     closeBtn.BackgroundTransparency = 1
     closeBtn.Image = Icons.close
-    closeBtn.ImageColor3 = colors.textDim
+    closeBtn.ImageColor3 = Arqel.Theme.TextDim
     closeBtn.ScaleType = Enum.ScaleType.Fit
+    closeBtn.Parent = header
     
     closeBtn.MouseEnter:Connect(function()
-        TweenService:Create(closeBtn, TweenInfo.new(0.15), {ImageColor3 = colors.error}):Play()
+        TweenService:Create(closeBtn, TweenInfo.new(0.15), {ImageColor3 = Arqel.Theme.Error}):Play()
     end)
     closeBtn.MouseLeave:Connect(function()
-        TweenService:Create(closeBtn, TweenInfo.new(0.15), {ImageColor3 = colors.textDim}):Play()
+        TweenService:Create(closeBtn, TweenInfo.new(0.15), {ImageColor3 = Arqel.Theme.TextDim}):Play()
     end)
     
-    local contentStartY = headerHeight + gap
+    local function handleClose()
+        Internal.IsOpen = false
+        Arqel:Notify("Goodbye", "See you next time!", 2, "close")
+        disableBlur()
+        TweenService:Create(main, TweenInfo.new(0.4, Enum.EasingStyle.Quart), {
+            Position = UDim2.new(0.5, 0, -0.5, 0),
+            BackgroundTransparency = 1
+        }):Play()
+        task.wait(0.4)
+        gui:Destroy()
+        Internal.GUI = nil
+        
+        if Arqel.Callbacks.OnClose then
+            Arqel.Callbacks.OnClose()
+        end
+    end
     
-    local statusFrame = Instance.new("Frame", mainFrame)
+    closeBtn.MouseButton1Click:Connect(handleClose)
+    
+    local contentStartY = 50 + 10
+    
+    -- Status frame
+    local statusFrame = Instance.new("Frame")
     statusFrame.Size = UDim2.new(0.94, 0, 0, statusHeight)
     statusFrame.Position = UDim2.new(0.5, 0, 0, contentStartY)
     statusFrame.AnchorPoint = Vector2.new(0.5, 0)
-    statusFrame.BackgroundColor3 = colors.input
+    statusFrame.BackgroundColor3 = Arqel.Theme.Input
     statusFrame.BorderSizePixel = 0
     statusFrame.ClipsDescendants = true
+    statusFrame.Parent = main
     
-    Instance.new("UICorner", statusFrame).CornerRadius = UDim.new(0, cornerRadius)
+    local statusCorner = Instance.new("UICorner")
+    statusCorner.CornerRadius = UDim.new(0, 4)
+    statusCorner.Parent = statusFrame
     
-    local statusStroke = Instance.new("UIStroke", statusFrame)
-    statusStroke.Color = colors.accent
-    statusStroke.Thickness = 1
-    statusStroke.Transparency = 0.8
-    
-    local statusIcon = Instance.new("ImageLabel", statusFrame)
+    local statusIcon = Instance.new("ImageLabel")
     statusIcon.Size = UDim2.new(0, 24, 0, 24)
     statusIcon.Position = UDim2.new(0, 16, 0.5, 0)
     statusIcon.AnchorPoint = Vector2.new(0, 0.5)
     statusIcon.BackgroundTransparency = 1
     statusIcon.Image = Icons.lock
-    statusIcon.ImageColor3 = colors.statusIdle
+    statusIcon.ImageColor3 = Color3.fromRGB(180, 80, 80)
     statusIcon.ScaleType = Enum.ScaleType.Fit
+    statusIcon.Parent = statusFrame
     
-    local statusLabel = Instance.new("TextLabel", statusFrame)
+    local statusLabel = Instance.new("TextLabel")
     statusLabel.Size = UDim2.new(1, -60, 1, 0)
     statusLabel.Position = UDim2.new(0, 52, 0, 0)
     statusLabel.BackgroundTransparency = 1
-    statusLabel.Text = self.Description
-    statusLabel.TextColor3 = colors.statusIdle
+    statusLabel.Text = Arqel.Appearance.Subtitle
+    statusLabel.TextColor3 = Color3.fromRGB(180, 80, 80)
     statusLabel.TextSize = mobile and 17 or 18
-    statusLabel.Font = Enum.Font.Gotham
+    statusLabel.Font = Enum.Font.GothamMedium
     statusLabel.TextXAlignment = Enum.TextXAlignment.Left
     statusLabel.TextTruncate = Enum.TextTruncate.AtEnd
+    statusLabel.Parent = statusFrame
     
-    local inputStartY = contentStartY + statusHeight + gap
+    local inputStartY = contentStartY + statusHeight + 10
     
-    local inputFrame = Instance.new("Frame", mainFrame)
+    -- Input frame
+    local inputFrame = Instance.new("Frame")
     inputFrame.Size = UDim2.new(0.94, 0, 0, elementHeight)
     inputFrame.Position = UDim2.new(0.5, 0, 0, inputStartY)
     inputFrame.AnchorPoint = Vector2.new(0.5, 0)
-    inputFrame.BackgroundColor3 = colors.input
+    inputFrame.BackgroundColor3 = Arqel.Theme.Input
     inputFrame.BorderSizePixel = 0
     inputFrame.ClipsDescendants = true
+    inputFrame.Parent = main
     
-    Instance.new("UICorner", inputFrame).CornerRadius = UDim.new(0, cornerRadius)
+    local inputCorner = Instance.new("UICorner")
+    inputCorner.CornerRadius = UDim.new(0, 4)
+    inputCorner.Parent = inputFrame
     
-    local inputStroke = Instance.new("UIStroke", inputFrame)
-    inputStroke.Color = colors.accent
+    local inputStroke = Instance.new("UIStroke")
+    inputStroke.Color = Arqel.Theme.Accent
     inputStroke.Thickness = 1
     inputStroke.Transparency = 0.7
+    inputStroke.Parent = inputFrame
     
-    local textBox = Instance.new("TextBox", inputFrame)
+    local textBox = Instance.new("TextBox")
     textBox.Size = UDim2.new(1, -24, 1, 0)
     textBox.Position = UDim2.new(0, 12, 0.5, 0)
     textBox.AnchorPoint = Vector2.new(0, 0.5)
     textBox.BackgroundTransparency = 1
     textBox.Text = ""
-    textBox.TextColor3 = colors.text
-    textBox.PlaceholderText = "Enter your license..."
-    textBox.PlaceholderColor3 = colors.textDim
+    textBox.TextColor3 = Arqel.Theme.Text
+    textBox.PlaceholderText = "Enter your license key..."
+    textBox.PlaceholderColor3 = Arqel.Theme.TextDim
     textBox.TextSize = mobile and 17 or 18
-    textBox.Font = Enum.Font.Gotham
+    textBox.Font = Enum.Font.GothamMedium
     textBox.ClearTextOnFocus = false
     textBox.TextTruncate = Enum.TextTruncate.AtEnd
     textBox.TextXAlignment = Enum.TextXAlignment.Left
+    textBox.Parent = inputFrame
     
     textBox.Focused:Connect(function()
         TweenService:Create(inputStroke, TweenInfo.new(0.15), {Transparency = 0.3}):Play()
@@ -700,61 +875,66 @@ function Arqel:_build()
     
     local dividerY = inputStartY + elementHeight + 12
     
-    local divider = Instance.new("Frame", mainFrame)
-    divider.Size = UDim2.new(1, 0, 0, 2)
+    -- Divider
+    local divider = Instance.new("Frame")
+    divider.Size = UDim2.new(1, 0, 0, 3)
     divider.Position = UDim2.new(0, 0, 0, dividerY)
-    divider.BackgroundColor3 = colors.divider
+    divider.BackgroundColor3 = Color3.fromRGB(45, 45, 70)
     divider.BorderSizePixel = 0
+    divider.Parent = main
     
-    local buttonStartY = dividerY + 14
+    local acquireStartY = dividerY + 3 + 12
     
+    -- Create button helper
     local function createButton(text, iconKey, isPrimary, yPos)
-        local btn = Instance.new("TextButton", mainFrame)
+        local btn = Instance.new("TextButton")
         btn.Size = UDim2.new(0.75, 0, 0, buttonHeight)
         btn.Position = UDim2.new(0.5, 0, 0, yPos)
         btn.AnchorPoint = Vector2.new(0.5, 0)
-        btn.BackgroundColor3 = isPrimary and colors.button or colors.input
+        btn.BackgroundColor3 = isPrimary and Arqel.Theme.Accent or Arqel.Theme.Input
         btn.BorderSizePixel = 0
         btn.Text = ""
         btn.AutoButtonColor = false
+        btn.Parent = main
         
-        Instance.new("UICorner", btn).CornerRadius = UDim.new(0, cornerRadius)
+        local btnCorner = Instance.new("UICorner")
+        btnCorner.CornerRadius = UDim.new(0, 4)
+        btnCorner.Parent = btn
         
-        local btnStroke = Instance.new("UIStroke", btn)
-        btnStroke.Color = isPrimary and colors.buttonHover or colors.accent
-        btnStroke.Thickness = 1
-        btnStroke.Transparency = isPrimary and 0.5 or 0.7
+        local contentHolder = Instance.new("Frame")
+        contentHolder.Size = UDim2.new(1, 0, 1, 0)
+        contentHolder.BackgroundTransparency = 1
+        contentHolder.Parent = btn
         
-        local holder = Instance.new("Frame", btn)
-        holder.Size = UDim2.new(1, 0, 1, 0)
-        holder.BackgroundTransparency = 1
+        local contentLayout = Instance.new("UIListLayout")
+        contentLayout.FillDirection = Enum.FillDirection.Horizontal
+        contentLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+        contentLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+        contentLayout.Padding = UDim.new(0, 8)
+        contentLayout.Parent = contentHolder
         
-        local layout = Instance.new("UIListLayout", holder)
-        layout.FillDirection = Enum.FillDirection.Horizontal
-        layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-        layout.VerticalAlignment = Enum.VerticalAlignment.Center
-        layout.Padding = UDim.new(0, 8)
+        local iconImage = Instance.new("ImageLabel")
+        iconImage.Size = UDim2.new(0, 18, 0, 18)
+        iconImage.BackgroundTransparency = 1
+        iconImage.Image = Icons[iconKey] or Icons.key
+        iconImage.ImageColor3 = Arqel.Theme.Text
+        iconImage.ScaleType = Enum.ScaleType.Fit
+        iconImage.LayoutOrder = 1
+        iconImage.Parent = contentHolder
         
-        local iconImg = Instance.new("ImageLabel", holder)
-        iconImg.Size = UDim2.new(0, 18, 0, 18)
-        iconImg.BackgroundTransparency = 1
-        iconImg.Image = Icons[iconKey] or Icons.key
-        iconImg.ImageColor3 = colors.text
-        iconImg.ScaleType = Enum.ScaleType.Fit
-        iconImg.LayoutOrder = 1
-        
-        local label = Instance.new("TextLabel", holder)
+        local label = Instance.new("TextLabel")
         label.Size = UDim2.new(0, 0, 0, 20)
         label.AutomaticSize = Enum.AutomaticSize.X
         label.BackgroundTransparency = 1
         label.Text = text
-        label.TextColor3 = colors.text
+        label.TextColor3 = Arqel.Theme.Text
         label.TextSize = mobile and 14 or 15
         label.Font = Enum.Font.GothamBold
         label.LayoutOrder = 2
+        label.Parent = contentHolder
         
         local originalColor = btn.BackgroundColor3
-        local hoverColor = isPrimary and colors.buttonHover or colors.button
+        local hoverColor = isPrimary and Arqel.Theme.AccentHover or Arqel.Theme.Accent
         
         btn.MouseEnter:Connect(function()
             TweenService:Create(btn, TweenInfo.new(0.15), {BackgroundColor3 = hoverColor}):Play()
@@ -766,48 +946,47 @@ function Arqel:_build()
         return btn
     end
     
-    local acquireBtn
-    if self.Premium then
-        acquireBtn = createButton("Join Discord", "discord", false, buttonStartY)
-    else
-        acquireBtn = createButton("Acquire License", "key", false, buttonStartY)
-    end
+    local acquireBtn = createButton("Acquire License", "key", false, acquireStartY)
+    local redeemBtn = createButton("Redeem License", "shield", true, acquireStartY + buttonHeight + 5)
     
-    local redeemBtn = createButton("Redeem License", "shield", true, buttonStartY + buttonHeight + 5)
+    -- Discord button
+    local discordStartY = acquireStartY + buttonHeight + 5 + buttonHeight + 5
     
-    local discordStartY = buttonStartY + (buttonHeight * 2) + 12
-    
-    local discordBtn = Instance.new("TextButton", mainFrame)
+    local discordBtn = Instance.new("TextButton")
     discordBtn.Size = UDim2.new(0, 36, 0, 36)
     discordBtn.Position = UDim2.new(0.5, 0, 0, discordStartY)
     discordBtn.AnchorPoint = Vector2.new(0.5, 0)
-    discordBtn.BackgroundColor3 = colors.background
+    discordBtn.BackgroundColor3 = Arqel.Theme.Background
     discordBtn.BorderSizePixel = 0
     discordBtn.Text = ""
     discordBtn.AutoButtonColor = false
-    discordBtn.Visible = not self.Premium
+    discordBtn.Parent = main
     
-    Instance.new("UICorner", discordBtn).CornerRadius = UDim.new(0, cornerRadius)
+    local discordCorner = Instance.new("UICorner")
+    discordCorner.CornerRadius = UDim.new(0, 4)
+    discordCorner.Parent = discordBtn
     
-    local discordIcon = Instance.new("ImageLabel", discordBtn)
+    local discordIcon = Instance.new("ImageLabel")
     discordIcon.Size = UDim2.new(0, 18, 0, 18)
     discordIcon.Position = UDim2.new(0.5, 0, 0.5, 0)
     discordIcon.AnchorPoint = Vector2.new(0.5, 0.5)
     discordIcon.BackgroundTransparency = 1
     discordIcon.Image = Icons.discord
-    discordIcon.ImageColor3 = colors.discord
+    discordIcon.ImageColor3 = Arqel.Theme.Discord
     discordIcon.ScaleType = Enum.ScaleType.Fit
+    discordIcon.Parent = discordBtn
     
     discordBtn.MouseEnter:Connect(function()
-        TweenService:Create(discordIcon, TweenInfo.new(0.15), {ImageColor3 = colors.discordHover}):Play()
+        TweenService:Create(discordIcon, TweenInfo.new(0.15), {ImageColor3 = Color3.fromRGB(114, 137, 218)}):Play()
     end)
     discordBtn.MouseLeave:Connect(function()
-        TweenService:Create(discordIcon, TweenInfo.new(0.15), {ImageColor3 = colors.discord}):Play()
+        TweenService:Create(discordIcon, TweenInfo.new(0.15), {ImageColor3 = Arqel.Theme.Discord}):Play()
     end)
     
+    -- Status management
     local spinConnection, dotsThread
     
-    local function setStatus(state, msg)
+    local function setStatus(state, customText)
         if spinConnection then
             spinConnection:Disconnect()
             spinConnection = nil
@@ -818,12 +997,14 @@ function Arqel:_build()
             dotsThread = nil
         end
         
+        local color = Color3.fromRGB(180, 80, 80)
+        local icon = Icons.lock
+        local text = customText or "No key detected"
+        
         if state == "verifying" then
-            statusLabel.TextColor3 = colors.accent
-            statusIcon.ImageColor3 = colors.accent
-            statusIcon.Image = Icons.loading
-            statusLabel.Text = msg or "Verifying license"
-            
+            color = Arqel.Theme.Accent
+            icon = Icons.loading
+            text = "Verifying license"
             spinConnection = RunService.Heartbeat:Connect(function(dt)
                 if statusIcon and statusIcon.Parent then
                     statusIcon.Rotation = (statusIcon.Rotation + dt * 360) % 360
@@ -831,332 +1012,321 @@ function Arqel:_build()
                     if spinConnection then spinConnection:Disconnect() end
                 end
             end)
-            
             local dots = {".", "..", "...", ""}
             local i = 1
-            local baseText = msg or "Verifying license"
             dotsThread = task.spawn(function()
                 while statusLabel and statusLabel.Parent do
                     if not statusLabel.Text:find("Verifying", 1, true) then break end
-                    statusLabel.Text = baseText .. dots[i]
+                    statusLabel.Text = text .. dots[i]
                     i = (i % #dots) + 1
                     task.wait(0.4)
                 end
             end)
         elseif state == "success" then
-            statusLabel.TextColor3 = colors.success
-            statusIcon.ImageColor3 = colors.success
-            statusIcon.Image = Icons.check
-            statusLabel.Text = msg or "License authenticated"
+            color = Arqel.Theme.Success
+            icon = Icons.check
+            text = customText or "Access Granted"
         elseif state == "error" then
-            statusLabel.TextColor3 = colors.error
-            statusIcon.ImageColor3 = colors.error
-            statusIcon.Image = Icons.alert
-            statusLabel.Text = msg or "Verification failed"
-        else
-            statusLabel.TextColor3 = colors.statusIdle
-            statusIcon.ImageColor3 = colors.statusIdle
-            statusIcon.Image = Icons.lock
-            statusLabel.Text = msg or self.Description
+            color = Arqel.Theme.Error
+            icon = Icons.alert
+            text = customText or "Invalid License"
+        elseif state == "idle" then
+            color = Color3.fromRGB(180, 80, 80)
+            icon = Icons.lock
+            text = customText or Arqel.Appearance.Subtitle
         end
+        
+        TweenService:Create(statusLabel, TweenInfo.new(0.3), {TextColor3 = color}):Play()
+        TweenService:Create(statusIcon, TweenInfo.new(0.3), {ImageColor3 = color}):Play()
+        statusLabel.Text = text
+        statusIcon.Image = icon
     end
     
-    local function handleClose()
-        self:Notify("Goodbye", "Session terminated", 2, "close")
-        self:_disableBlur()
-        
-        TweenService:Create(mainFrame, TweenInfo.new(0.4, Enum.EasingStyle.Quart), {
-            Position = UDim2.new(0.5, 0, -0.5, 0),
-            BackgroundTransparency = 1
-        }):Play()
-        
-        task.wait(0.4)
-        screenGui:Destroy()
-    end
-    
-    closeBtn.MouseButton1Click:Connect(handleClose)
-    
+    -- Redeem handler
     local function handleRedeem()
         local key = textBox.Text:gsub("%s+", "")
-        
         if key == "" then
-            self:Notify("Error", "Please enter your license", 3, "warning")
+            Arqel:Notify("Error", "Please enter your license key", 3, "warning")
             return
         end
         
         setStatus("verifying")
         redeemBtn.Active = false
-        
         task.wait(0.3)
         
-        local success, result
+        local valid = false
+        local errorMsg = "Validation failed"
         
-        if self._junkie then
-            success, result = pcall(function()
-                return self._junkie.check_key(key)
-            end)
-        elseif self._connectCallback then
-            local callbackResult = {valid = false, error = nil, message = nil}
-            local UI = {}
-            function UI:Success()
-                callbackResult.valid = true
-                callbackResult.message = "KEY_VALID"
+        if Arqel.Callbacks.OnVerify then
+            local success, result, msg = pcall(Arqel.Callbacks.OnVerify, key)
+            if success then
+                if type(result) == "boolean" then
+                    valid = result
+                    errorMsg = msg or "Invalid key"
+                end
+            else
+                errorMsg = "Verification error"
             end
-            function UI:Error(msg)
-                callbackResult.valid = false
-                callbackResult.error = msg or "INVALID"
-            end
-            
-            success = true
-            pcall(function()
-                self._connectCallback(key, UI)
-            end)
-            result = callbackResult
         else
-            success = false
+            errorMsg = "No verification callback set"
         end
         
         redeemBtn.Active = true
         
-        if not success then
-            setStatus("error")
-            self:Notify("Error", "Connection failed", 3, "error")
-            return
-        end
-        
-        if not result then
-            setStatus("error")
-            self:Notify("Error", "Server unreachable", 3, "error")
-            return
-        end
-        
-        if result.valid or result.message == "KEY_VALID" or result.message == "KEYLESS" then
-            self:_saveKey(key)
+        if valid then
+            saveKey(key)
             getgenv().SCRIPT_KEY = key
             setStatus("success")
-            self:Notify("Success", "License authenticated!", 2, "success")
-            
+            Arqel:Notify("Success", "License validated successfully!", 2, "success")
             task.wait(1)
-            self:_disableBlur()
             
-            TweenService:Create(mainFrame, TweenInfo.new(0.4, Enum.EasingStyle.Quart), {
+            Internal.IsOpen = false
+            disableBlur()
+            TweenService:Create(main, TweenInfo.new(0.4, Enum.EasingStyle.Quart), {
                 Position = UDim2.new(0.5, 0, -0.5, 0),
                 BackgroundTransparency = 1
             }):Play()
-            
             task.wait(0.4)
-            screenGui:Destroy()
+            gui:Destroy()
+            Internal.GUI = nil
+            
+            if Arqel.Callbacks.OnSuccess then
+                Arqel.Callbacks.OnSuccess()
+            end
         else
-            setStatus("error")
+            setStatus("error", errorMsg)
+            Arqel:Notify("Invalid", errorMsg, 4, "error")
             
-            local errorMessages = {
-                KEY_INVALID = "License not found",
-                KEY_EXPIRED = "License has expired",
-                HWID_BANNED = "Hardware banned",
-                KEY_INVALIDATED = "License revoked",
-                ALREADY_USED = "License already claimed",
-                HWID_MISMATCH = "Device limit reached",
-                SERVICE_NOT_FOUND = "Service unavailable",
-                SERVICE_MISMATCH = "Service mismatch",
-                PREMIUM_REQUIRED = "Premium access required",
-                ERROR = "Connection failed"
-            }
-            
-            local errCode = result.error or "Unknown"
-            local msg = errorMessages[errCode] or result.message or errCode
-            
-            self:Notify("Failed", msg, 4, "error")
-            
-            if errCode == "HWID_BANNED" then
-                task.wait(2)
-                Players.LocalPlayer:Kick("Hardware banned")
+            if Arqel.Callbacks.OnFail then
+                Arqel.Callbacks.OnFail(errorMsg)
             end
         end
     end
     
     redeemBtn.MouseButton1Click:Connect(handleRedeem)
     
-    textBox.FocusLost:Connect(function(enter)
-        if enter then handleRedeem() end
-    end)
-    
     acquireBtn.MouseButton1Click:Connect(function()
-        if self.Premium then
-            if self.Discord and self.Discord ~= "" then
-                self:Notify("Copied", "Discord invite copied!", 2, "copy")
-                pcall(function() setclipboard(self.Discord) end)
-            else
-                self:Notify("Error", "No Discord configured", 3, "error")
-            end
+        local link = Arqel.Links.GetKey
+        if link and link ~= "" then
+            Arqel:Notify("Copied", "License link copied to clipboard!", 3, "copy")
+            pcall(function() setclipboard(link) end)
         else
-            local link = self.KeyLink
-            if (not link or link == "") and self._junkie then
-                pcall(function() link = self._junkie.get_key_link() end)
-            end
-            
-            if link and link ~= "" then
-                self:Notify("Copied", "License link copied!", 3, "copy")
-                pcall(function() setclipboard(link) end)
-            else
-                self:Notify("Error", "No license link configured", 3, "error")
-            end
+            Arqel:Notify("Error", "No key link configured", 3, "warning")
         end
     end)
     
     discordBtn.MouseButton1Click:Connect(function()
-        if self.Discord and self.Discord ~= "" then
-            self:Notify("Copied", "Discord invite copied!", 2, "copy")
-            pcall(function() setclipboard(self.Discord) end)
-        else
-            self:Notify("Error", "No Discord configured", 3, "error")
+        if Arqel.Links.Discord and Arqel.Links.Discord ~= "" then
+            Arqel:Notify("Discord", "Invite link copied!", 2, "discord")
+            pcall(function() setclipboard(Arqel.Links.Discord) end)
         end
     end)
     
-    local dragging, dragStart, startPos = false, nil, nil
-    
-    header.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true
-            dragStart = input.Position
-            startPos = mainFrame.Position
-            input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then
-                    dragging = false
-                end
-            end)
-        end
+    textBox.FocusLost:Connect(function(enterPressed)
+        if enterPressed then handleRedeem() end
     end)
     
-    UserInputService.InputChanged:Connect(function(input)
-        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-            local delta = input.Position - dragStart
-            mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-        end
-    end)
+    -- Dragging
+    if Arqel.Options.Draggable then
+        local dragging, dragStart, startPos
+        
+        header.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                dragging = true
+                dragStart = input.Position
+                startPos = main.Position
+                input.Changed:Connect(function()
+                    if input.UserInputState == Enum.UserInputState.End then
+                        dragging = false
+                    end
+                end)
+            end
+        end)
+        
+        UserInputService.InputChanged:Connect(function(input)
+            if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+                local delta = input.Position - dragStart
+                main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+            end
+        end)
+    end
     
-    mainFrame.Position = UDim2.new(0.5, 0, 1.5, 0)
-    TweenService:Create(mainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Quart), {
+    -- Animate in
+    main.Position = UDim2.new(0.5, 0, 1.5, 0)
+    TweenService:Create(main, TweenInfo.new(0.5, Enum.EasingStyle.Quart), {
         Position = UDim2.new(0.5, 0, 0.5, 0)
     }):Play()
+    
+    return gui
 end
 
-function Arqel:_getKeyToValidate()
-    if getgenv().SCRIPT_KEY and getgenv().SCRIPT_KEY ~= "" then
-        return getgenv().SCRIPT_KEY, "getgenv"
+--================================--
+--        PUBLIC METHODS          --
+--================================--
+
+function Arqel:Launch()
+    -- Check for forced keyless
+    if Arqel.Options.Keyless == true then
+        BuildKeylessUI()
+        return
     end
     
-    local savedKey = self:_loadKey()
-    if savedKey then
-        return savedKey, "saved"
+    -- Check for saved key if AutoLoad enabled
+    if Arqel.Storage.AutoLoad then
+        local savedKey = loadKey()
+        if savedKey and savedKey ~= "" and Arqel.Callbacks.OnVerify then
+            Arqel:Notify("Checking", "Validating saved license...", 2, "info")
+            task.wait(0.5)
+            
+            local success, valid = pcall(Arqel.Callbacks.OnVerify, savedKey)
+            if success and valid then
+                getgenv().SCRIPT_KEY = savedKey
+                Arqel:Notify("Welcome Back", "License validated!", 2, "success")
+                task.wait(0.5)
+                
+                if Arqel.Callbacks.OnSuccess then
+                    Arqel.Callbacks.OnSuccess()
+                end
+                return
+            else
+                clearKey()
+                Arqel:Notify("Expired", "Saved license is no longer valid", 3, "warning")
+                task.wait(1)
+            end
+        end
     end
     
-    return nil, nil
+    -- Show key UI
+    BuildKeyUI()
 end
 
-function Arqel:_validateWithJunkie(key)
-    if not self._junkie then return nil end
+function Arqel:LaunchJunkie(config)
+    assert(config, "Junkie config required")
+    assert(config.Service, "Service name required")
+    assert(config.Identifier, "Identifier required")
+    assert(config.Provider, "Provider name required")
     
-    local success, result = pcall(function()
-        return self._junkie.check_key(key)
+    -- Load Junkie
+    local success, Junkie = pcall(function()
+        return loadstring(game:HttpGet("https://jnkie.com/sdk/library.lua"))()
     end)
     
-    if success and result then
-        return result
+    if not success then
+        Arqel:Notify("Error", "Failed to load Junkie SDK", 5, "error")
+        return
     end
     
-    return nil
+    Junkie.service = config.Service
+    Junkie.identifier = config.Identifier
+    Junkie.provider = config.Provider
+    Internal.Junkie = Junkie
+    Internal.JunkieConfig = config
+    
+    -- Set key link if not already set
+    if not Arqel.Links.GetKey or Arqel.Links.GetKey == "" then
+        pcall(function()
+            Arqel.Links.GetKey = Junkie.get_key_link()
+        end)
+    end
+    
+    -- Check for keyless mode (auto-detect)
+    if Arqel.Options.Keyless == nil then
+        local keylessSuccess, keylessResult = pcall(function()
+            return Junkie.check_key("KEYLESS")
+        end)
+        
+        if keylessSuccess and keylessResult and keylessResult.valid then
+            BuildKeylessUI()
+            return
+        end
+    elseif Arqel.Options.Keyless == true then
+        BuildKeylessUI()
+        return
+    end
+    
+    -- Set up verify callback for Junkie
+    Arqel.Callbacks.OnVerify = function(key)
+        local result = Junkie.check_key(key)
+        
+        if result and result.valid then
+            return true
+        else
+            local errorMessages = {
+                KEY_INVALID = "Key not found",
+                KEY_EXPIRED = "License expired",
+                HWID_BANNED = "Hardware banned",
+                KEY_INVALIDATED = "License revoked",
+                ALREADY_USED = "Key already used",
+                HWID_MISMATCH = "HWID limit reached",
+                SERVICE_NOT_FOUND = "Service not found",
+                SERVICE_MISMATCH = "Wrong service",
+                PREMIUM_REQUIRED = "Premium required"
+            }
+            local errCode = result and result.error or "Unknown"
+            local errMsg = errorMessages[errCode] or result and result.message or errCode
+            return false, errMsg
+        end
+    end
+    
+    -- Check saved key
+    if Arqel.Storage.AutoLoad then
+        local savedKey = loadKey()
+        if savedKey and savedKey ~= "" then
+            Arqel:Notify("Checking", "Validating saved license...", 2, "info")
+            task.wait(0.5)
+            
+            local valid, errMsg = Arqel.Callbacks.OnVerify(savedKey)
+            if valid then
+                getgenv().SCRIPT_KEY = savedKey
+                Arqel:Notify("Welcome Back", "License validated!", 2, "success")
+                task.wait(0.5)
+                
+                if Arqel.Callbacks.OnSuccess then
+                    Arqel.Callbacks.OnSuccess()
+                end
+                return
+            else
+                clearKey()
+                Arqel:Notify("Expired", "Saved license invalid", 3, "warning")
+                task.wait(1)
+            end
+        end
+    end
+    
+    -- Show key UI
+    BuildKeyUI()
 end
 
-function Arqel:Await()
-    -- User forced keyless
-    if self.Keyless then
-        self:Notify("Granted", "Access granted!", 2, "success")
-        getgenv().SCRIPT_KEY = "KEYLESS"
-        if self._verifiedCallback then
-            task.spawn(self._verifiedCallback)
-        end
-        return self
+function Arqel:Close()
+    if Internal.GUI and Internal.GUI.Parent then
+        Internal.IsOpen = false
+        disableBlur()
+        Internal.GUI:Destroy()
+        Internal.GUI = nil
     end
-    
-    local keyToCheck, keySource = self:_getKeyToValidate()
-    
-    if keyToCheck then
-        self:Notify("Verifying", "Validating saved license...", 2, "shield")
-        task.wait(0.3)
-        
-        local result
-        
-        if self._junkie then
-            result = self:_validateWithJunkie(keyToCheck)
-        elseif self._connectCallback then
-            local callbackResult = {valid = false, message = nil}
-            local UI = {}
-            function UI:Success()
-                callbackResult.valid = true
-                callbackResult.message = "KEY_VALID"
-            end
-            function UI:Error() callbackResult.valid = false end
-            
-            pcall(function()
-                self._connectCallback(keyToCheck, UI)
-            end)
-            result = callbackResult
-        end
-        
-        if result and (result.valid or result.message == "KEY_VALID" or result.message == "KEYLESS") then
-            if result.message == "KEYLESS" then
-                getgenv().SCRIPT_KEY = "KEYLESS"
-                self:Notify("Welcome", "Access granted!", 2, "success")
-            else
-                if keySource == "getgenv" then
-                    self:_saveKey(keyToCheck)
-                end
-                getgenv().SCRIPT_KEY = keyToCheck
-                self:Notify("Welcome Back", "License authenticated!", 2, "success")
-            end
-            
-            if self._verifiedCallback then
-                task.spawn(self._verifiedCallback)
-            end
-            return self
-        else
-            if keySource == "saved" then
-                self:_clearKey()
-                self:Notify("Expired", "Saved license has expired", 3, "warning")
-            end
-            getgenv().SCRIPT_KEY = nil
-            task.wait(1)
-        end
-    else
-        -- No key to check - try keyless detection for Junkie
-        if self._junkie then
-            local result = self:_validateWithJunkie("KEYLESS_CHECK")
-            if result and result.valid and result.message == "KEYLESS" then
-                getgenv().SCRIPT_KEY = "KEYLESS"
-                self:Notify("Welcome", "Access granted!", 2, "success")
-                
-                if self._verifiedCallback then
-                    task.spawn(self._verifiedCallback)
-                end
-                return self
-            end
+end
+
+function Arqel:Destroy()
+    Arqel:Close()
+    -- Clean up notifications
+    for _, n in ipairs(Internal.NotificationList) do
+        if n.gui and n.gui.Parent then
+            n.gui:Destroy()
         end
     end
-    
-    -- Show UI
-    self:_build()
-    
-    -- Wait for validation
-    while not getgenv().SCRIPT_KEY do
-        task.wait(0.1)
-    end
-    
-    -- Call verified callback after UI completes
-    if self._verifiedCallback then
-        task.spawn(self._verifiedCallback)
-    end
-    
-    return self
+    Internal.NotificationList = {}
+end
+
+function Arqel:IsOpen()
+    return Internal.IsOpen
+end
+
+function Arqel:GetSavedKey()
+    return loadKey()
+end
+
+function Arqel:ClearSavedKey()
+    return clearKey()
 end
 
 return Arqel
