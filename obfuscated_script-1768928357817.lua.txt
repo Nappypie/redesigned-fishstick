@@ -1,9 +1,9 @@
 --[[
     Arqel Key System API v1.0
     
-    Usage:
-    - :Launch() for custom validation
-    - :LaunchJunkie({...}) for Junkie Development
+    Methods:
+    - :LaunchJunkie() - For Junkie Development
+    - :Launch() - For Custom/Other Services
 ]]
 
 local TweenService = game:GetService("TweenService")
@@ -62,6 +62,7 @@ Arqel.Theme = {
 }
 
 Arqel.Callbacks = {
+    OnVerify = nil,
     OnSuccess = nil,
     OnFail = nil,
     OnClose = nil
@@ -75,7 +76,8 @@ local Internal = {
     Junkie = nil,
     BlurEffect = nil,
     NotificationList = {},
-    ValidateFunction = nil
+    ValidateFunction = nil,
+    IsJunkieMode = false
 }
 
 local Icons = {
@@ -583,7 +585,9 @@ local function BuildKeylessUI()
         Arqel:Notify("Launching", "Script loaded successfully!", 2, "success")
         getgenv().SCRIPT_KEY = "KEYLESS"
         closeUI()
-        if Arqel.Callbacks.OnSuccess then
+        
+        -- Only call OnSuccess for non-Junkie mode
+        if not Internal.IsJunkieMode and Arqel.Callbacks.OnSuccess then
             Arqel.Callbacks.OnSuccess()
         end
     end)
@@ -1043,7 +1047,9 @@ local function BuildKeyUI()
             }):Play()
             task.wait(0.4)
             gui:Destroy()
-            if Arqel.Callbacks.OnSuccess then
+            
+            -- Only call OnSuccess for non-Junkie mode
+            if not Internal.IsJunkieMode and Arqel.Callbacks.OnSuccess then
                 Arqel.Callbacks.OnSuccess()
             end
         else
@@ -1113,7 +1119,7 @@ end
 --================================--
 
 function Arqel:Launch()
-    -- Set validate function from callback
+    Internal.IsJunkieMode = false
     Internal.ValidateFunction = Arqel.Callbacks.OnVerify
     
     -- Force keyless
@@ -1170,6 +1176,8 @@ function Arqel:LaunchJunkie(config)
     assert(config.Service, "Service required")
     assert(config.Identifier, "Identifier required")
     assert(config.Provider, "Provider required")
+    
+    Internal.IsJunkieMode = true
     
     -- Load Junkie SDK
     local success, Junkie = pcall(function()
@@ -1233,9 +1241,6 @@ function Arqel:LaunchJunkie(config)
             if validateSuccess and validateResult and validateResult.valid then
                 getgenv().SCRIPT_KEY = savedKey
                 Arqel:Notify("Welcome Back", "License validated!", 2, "success")
-                if Arqel.Callbacks.OnSuccess then
-                    Arqel.Callbacks.OnSuccess()
-                end
                 return
             else
                 clearKey()
@@ -1260,4 +1265,4 @@ function Arqel:ClearSavedKey()
     return clearKey()
 end
 
-return Arqel 
+return Arqel
