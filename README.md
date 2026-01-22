@@ -304,7 +304,7 @@ Arqel:LaunchJunkie({
 
 ## Support
 
-- Discord: [discord.gg/xxx](https://discord.gg/xxx)
+- Discord: [discord.gg/xxx](https://dsc.gg/Arqel)
 - Issues: [GitHub Issues](https://github.com/xxx/xxx/issues)
 
 ---
@@ -316,4 +316,3 @@ MIT License - Free to use and modify.
 
 ---
 
-**Just copy everything above and paste into your GitHub README.md file!**
