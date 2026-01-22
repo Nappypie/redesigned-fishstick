@@ -1,6 +1,3 @@
-# Arqel API - GitHub README
-
-```markdown
 # Arqel Key System
 
 A clean, customizable key system UI library for Roblox scripts.
@@ -24,6 +21,10 @@ A clean, customizable key system UI library for Roblox scripts.
 
 ---
 
+## Installation
+
+```lua
+local Arqel = loadstring(game:HttpGet("YOUR_RAW_URL_HERE"))()
 ## Installation
 
 ```lua
