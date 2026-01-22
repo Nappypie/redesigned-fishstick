@@ -1,14 +1,3 @@
---[[
-    Arqel Key System API v1.0
-    
-    Methods:
-    - :LaunchJunkie(config) - For Junkie Development
-    - :Launch() - For Custom/Other Services
-    - :Notify(title, msg, duration, type) - Show notification
-    - :GetSavedKey() - Get stored key
-    - :ClearSavedKey() - Delete stored key
-]]
-
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local CoreGui = game:GetService("CoreGui")
@@ -179,6 +168,15 @@ local function setupDragging(header, main)
             main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
         end
     end)
+end
+
+local function validateKey(key, validateFunc)
+    if not validateFunc or not key or key == "" then return false end
+    local success, result = pcall(validateFunc, key)
+    if not success then return false end
+    if type(result) == "table" then return result.valid == true end
+    if type(result) == "boolean" then return result end
+    return false
 end
 
 function Arqel:Notify(title, message, duration, iconType)
@@ -1041,6 +1039,16 @@ function Arqel:Launch()
     Internal.IsJunkieMode = false
     Internal.ValidateFunction = Arqel.Callbacks.OnVerify
     
+    local existingKey = getgenv().SCRIPT_KEY
+    if existingKey and existingKey ~= "" and Internal.ValidateFunction then
+        if validateKey(existingKey, Internal.ValidateFunction) then
+            if Arqel.Callbacks.OnSuccess then Arqel.Callbacks.OnSuccess() end
+            return
+        else
+            getgenv().SCRIPT_KEY = nil
+        end
+    end
+    
     if Arqel.Options.Keyless == true then
         BuildKeylessUI()
         while not getgenv().SCRIPT_KEY do task.wait(0.1) end
@@ -1052,9 +1060,7 @@ function Arqel:Launch()
         if savedKey and savedKey ~= "" then
             Arqel:Notify("Checking", "Validating saved license...", 2, "shield")
             task.wait(0.5)
-            local success, result = pcall(Internal.ValidateFunction, savedKey)
-            local valid = success and ((type(result) == "table" and result.valid) or (type(result) == "boolean" and result))
-            if valid then
+            if validateKey(savedKey, Internal.ValidateFunction) then
                 getgenv().SCRIPT_KEY = savedKey
                 Arqel:Notify("Welcome Back", "License validated!", 2, "success")
                 if Arqel.Callbacks.OnSuccess then Arqel.Callbacks.OnSuccess() end
@@ -1072,7 +1078,7 @@ function Arqel:Launch()
 end
 
 function Arqel:LaunchJunkie(config)
-    assert(config and config.Service and config.Identifier and config.Provider, "Junkie config required: Service, Identifier, Provider")
+    assert(config and config.Service and config.Identifier and config.Provider, "Config required: Service, Identifier, Provider")
     
     Internal.IsJunkieMode = true
     
@@ -1095,6 +1101,16 @@ function Arqel:LaunchJunkie(config)
     end
     
     Internal.ValidateFunction = function(key) return Junkie.check_key(key) end
+    
+    local existingKey = getgenv().SCRIPT_KEY
+    if existingKey and existingKey ~= "" then
+        local vs, vr = pcall(function() return Junkie.check_key(existingKey) end)
+        if vs and vr and vr.valid then
+            return
+        else
+            getgenv().SCRIPT_KEY = nil
+        end
+    end
     
     if Arqel.Options.Keyless == nil then
         local ks, kr = pcall(function() return Junkie.check_key("KEYLESS") end)
