@@ -1,0 +1,173 @@
+local Auth = {}
+
+local Arqel = nil
+local Internal = nil
+local FileSystem = nil
+local Icons = nil
+local Utils = nil
+local Notify = nil
+local LoadingScreen = nil
+local BuildKeyUI = nil
+local BuildKeylessUI = nil
+
+function Auth._init(deps)
+    Arqel = deps.Arqel
+    Internal = deps.Internal
+    FileSystem = deps.FileSystem
+    Icons = deps.Icons
+    Utils = deps.Utils
+    Notify = deps.Notify
+    LoadingScreen = deps.LoadingScreen
+    BuildKeyUI = deps.BuildKeyUI
+    BuildKeylessUI = deps.BuildKeylessUI
+end
+
+function Auth.validateKey(key, validateFunc)
+    if not validateFunc or not key or key == "" then return false end
+    local success, result = pcall(validateFunc, key)
+    if not success then return false end
+    if type(result) == "table" then return result.valid == true end
+    if type(result) == "boolean" then return result end
+    return false
+end
+
+function Auth.handleKeylessSkip()
+    getgenv().SCRIPT_KEY = "KEYLESS"
+    getgenv().ArqelLoaded = false
+    Notify.send("Access Granted", "Keyless access approved!", 3, "success")
+    task.wait(0.3)
+    if Arqel.Callbacks.OnSuccess then Arqel.Callbacks.OnSuccess() end
+end
+
+function Auth.EnsureIconsReady(callback)
+    if Icons.allIconsCached() then
+        Icons.loadAllIconsFromCache()
+        if callback then callback() end
+    else
+        LoadingScreen.Show(callback)
+    end
+end
+
+function Auth.tryAutoLoad()
+    if not Arqel.Storage.AutoLoad or not Internal.ValidateFunction then return false end
+    local savedKey = FileSystem.loadKey()
+    if not savedKey or savedKey == "" then return false end
+    Notify.send("Checking", "Validating saved key...", 2, "shield")
+    task.wait(0.5)
+    if Auth.validateKey(savedKey, Internal.ValidateFunction) then
+        getgenv().SCRIPT_KEY = savedKey
+        Notify.send("Welcome Back", "Key validated!", 2, "success")
+        if Arqel.Callbacks.OnSuccess then Arqel.Callbacks.OnSuccess() end
+        return true
+    end
+    FileSystem.clearKey()
+    Notify.send("Expired", "Saved key is no longer valid", 3, "warning")
+    task.wait(1)
+    return false
+end
+
+function Auth.tryAutoLoadJunkie(checkKeyFn)
+    if not Arqel.Storage.AutoLoad then return false end
+    local savedKey = FileSystem.loadKey()
+    if not savedKey or savedKey == "" then return false end
+    Notify.send("Checking", "Validating saved key...", 2, "shield")
+    task.wait(0.5)
+    local vs, vr = pcall(checkKeyFn, savedKey)
+    if vs and vr and vr.valid then
+        getgenv().SCRIPT_KEY = savedKey
+        Notify.send("Welcome Back", "Key validated!", 2, "success")
+        if Arqel.Callbacks.OnSuccess then Arqel.Callbacks.OnSuccess() end
+        return true
+    end
+    FileSystem.clearKey()
+    Notify.send("Expired", "Saved key is no longer valid", 3, "warning")
+    task.wait(1)
+    return false
+end
+
+function Auth.Launch()
+    Internal.IsJunkieMode = false
+    Internal.ValidateFunction = Arqel.Callbacks.OnVerify
+
+    local existingKey = getgenv().SCRIPT_KEY
+    if existingKey and existingKey ~= "" then
+        if existingKey == "KEYLESS" then
+            Notify.send("Executed", "Script loaded successfully!", 2, "success")
+            if Arqel.Callbacks.OnSuccess then Arqel.Callbacks.OnSuccess() end
+            return
+        elseif Internal.ValidateFunction and Auth.validateKey(existingKey, Internal.ValidateFunction) then
+            Notify.send("Executed", "Script loaded successfully!", 2, "success")
+            if Arqel.Callbacks.OnSuccess then Arqel.Callbacks.OnSuccess() end
+            return
+        end
+        getgenv().SCRIPT_KEY = nil
+    end
+
+    getgenv().ArqelClosed = false
+
+    Auth.EnsureIconsReady(function()
+        if Arqel.Options.Keyless == true then
+            if Arqel.Options.KeylessUI == false then Auth.handleKeylessSkip() return end
+            BuildKeylessUI()
+            while not getgenv().SCRIPT_KEY and not getgenv().ArqelClosed do task.wait(0.1) end
+            return
+        end
+        if Auth.tryAutoLoad() then return end
+        BuildKeyUI()
+        while not getgenv().SCRIPT_KEY and not getgenv().ArqelClosed do task.wait(0.1) end
+    end)
+end
+
+function Auth.LaunchJunkie(config)
+    assert(config and config.Service and config.Identifier and config.Provider, "Config required: Service, Identifier, Provider")
+    Internal.IsJunkieMode = true
+
+    local existingKey = getgenv().SCRIPT_KEY
+    if existingKey and existingKey ~= "" then
+        Notify.send("Executed", "Script loaded successfully!", 2, "success")
+        if Arqel.Callbacks.OnSuccess then Arqel.Callbacks.OnSuccess() end
+        return
+    end
+
+    getgenv().ArqelClosed = false
+
+    Auth.EnsureIconsReady(function()
+        local success, Junkie = pcall(function() return loadstring(game:HttpGet("https://jnkie.com/sdk/library.lua"))() end)
+        if not success or not Junkie then
+            Notify.send("Error", "Failed to load Junkie SDK", 5, "error")
+            return
+        end
+
+        Junkie.service = config.Service
+        Junkie.identifier = config.Identifier
+        Junkie.provider = config.Provider
+        Internal.Junkie = Junkie
+
+        if Arqel.Links.GetKey == "" then
+            pcall(function() Arqel.Links.GetKey = Junkie.get_key_link() end)
+        end
+
+        Internal.ValidateFunction = function(key) return Junkie.check_key(key) end
+
+        if Arqel.Options.Keyless == nil then
+            local ks, kr = pcall(function() return Junkie.check_key("KEYLESS") end)
+            if ks and kr and kr.valid then
+                if Arqel.Options.KeylessUI == false then Auth.handleKeylessSkip() return end
+                BuildKeylessUI()
+                while not getgenv().SCRIPT_KEY and not getgenv().ArqelClosed do task.wait(0.1) end
+                return
+            end
+        elseif Arqel.Options.Keyless == true then
+            if Arqel.Options.KeylessUI == false then Auth.handleKeylessSkip() return end
+            BuildKeylessUI()
+            while not getgenv().SCRIPT_KEY and not getgenv().ArqelClosed do task.wait(0.1) end
+            return
+        end
+
+        if Auth.tryAutoLoadJunkie(Junkie.check_key) then return end
+        BuildKeyUI()
+        while not getgenv().SCRIPT_KEY and not getgenv().ArqelClosed do task.wait(0.1) end
+    end)
+end
+
+return Auth
