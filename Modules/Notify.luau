@@ -1,3 +1,5 @@
+local cloneref = cloneref or function(obj) return obj end
+
 local TweenService = cloneref(game:GetService("TweenService"))
 local HttpService = cloneref(game:GetService("HttpService"))
 

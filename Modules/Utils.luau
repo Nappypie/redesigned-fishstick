@@ -12,6 +12,8 @@
      License: MIT
 ]]
 
+local cloneref = cloneref or function(obj) return obj end
+
 local TweenService = cloneref(game:GetService("TweenService"))
 local UserInputService = cloneref(game:GetService("UserInputService"))
 local Lighting = cloneref(game:GetService("Lighting"))
