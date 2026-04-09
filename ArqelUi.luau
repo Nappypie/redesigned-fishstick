@@ -16,13 +16,13 @@ repeat task.wait() until game:IsLoaded()
 
 local cloneref = cloneref or function(obj) return obj end
 local gethui = gethui or function() return cloneref(game:GetService("CoreGui")) end
+local HttpService = cloneref(game:GetService("HttpService"))
 
 local hui = gethui()
 
-if getgenv().ArqelLoaded and hui:FindFirstChild("ArqelKeySystem") then return getgenv().Arqel end
-if getgenv().ArqelLoaded and hui:FindFirstChild("ArqelKeylessSystem") then return getgenv().Arqel end
-getgenv().ArqelLoaded = true
-getgenv().ArqelClosed = false
+--prevent double load of same instance only
+if hui:FindFirstChild("ArqelKeySystem") then return getgenv().Arqel end
+if hui:FindFirstChild("ArqelKeylessSystem") then return getgenv().Arqel end
 
 local BaseURL = "https://raw.githubusercontent.com/Nappypie/redesigned-fishstick/main/Modules/"
 
@@ -110,7 +110,7 @@ local LoadingScreen = fetch("LoadingScreen")
 local UI = fetch("UI")
 local Auth = fetch("Auth")
 
---init modules with shared refs
+--init modules
 Utils._init(Internal, Arqel)
 FileSystem._init(Arqel)
 Icons._init(FileSystem, Arqel)
